@@ -1,4 +1,4 @@
-# CPMS — Computer Project Management System
+# CPMS — Capstone Project Management System
 
 A full-stack web application for managing final-year computer projects — from proposal submission and supervisor allocation through milestones, meetings, submissions, panel grading, and notifications.
 
