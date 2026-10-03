@@ -1,6 +1,33 @@
+# ─── Python / Django ────────────────────────
 venv/
-.venv/
+env/
 __pycache__/
-node_modules/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ─── Environment / Secrets ──────────────────
 .env
-dist/
+.env.local
+*.env
+
+# ─── Django generated ───────────────────────
+media/
+staticfiles/
+db.sqlite3
+
+# ─── Node / Vite / React ────────────────────
+node_modules/
+cpms_frontend/dist/
+cpms_frontend/.vite/
+npm-debug.log*
+yarn-error.log*
+
+# ─── Editor / OS ────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
