@@ -279,6 +279,7 @@ Resource Endpoints
 All resources are provided by DRF's DefaultRouter and support list, create, retrieve, update, partial_update, and destroy where applicable.
 
 Resource	Endpoint
+
 Users	/api/users/
 Projects	/api/projects/
 Project Proposals	/api/proposals/
@@ -294,6 +295,7 @@ Notifications	/api/notifications/
 
 
 Example: Log in
+
 bash
 curl -X POST http://127.0.0.1:8000/api/auth/login/ \
   -H "Content-Type: application/json" \
@@ -301,12 +303,14 @@ curl -X POST http://127.0.0.1:8000/api/auth/login/ \
 
   
 Example: List projects
+
 bash
 curl http://127.0.0.1:8000/api/projects/ \
   -H "Authorization: Bearer <access_token>"
 
   
 User Roles
+
 Role	Capabilities
 Student	Submit proposals, upload submissions, book meetings, view grades
 Lecturer / Supervisor	Review proposals, publish meeting slots, grade milestones
@@ -314,6 +318,7 @@ Panelist	Grade projects using defined grading criteria
 Admin	Manage users, invite supervisors, configure system settings, run auto-allocation
 Authentication Flow
 User submits credentials to /api/auth/login/.
+
 
 If the user's role is in OTP_REQUIRED_ROLES (LECTURER, PANELIST):
 
@@ -330,6 +335,7 @@ Backend returns JWT pair directly.
 
 Frontend stores:
 
+
 Access token in sessionStorage (cleared when tab closes)
 
 Refresh token in localStorage (survives page reloads)
@@ -339,10 +345,12 @@ The Axios request interceptor attaches Authorization: Bearer <access> to every r
 On 401 Unauthorized, the response interceptor logs the user out and redirects to /login.
 
 Testing
+
 bash
 python manage.py test
 
 With coverage:
+
 bash
 pip install coverage
 coverage run manage.py test
@@ -352,6 +360,7 @@ coverage html      # generates htmlcov/index.html
 
 Deployment Notes
 Before deploying to production:
+
 □ Set DEBUG=False in .env
 □ Configure ALLOWED_HOSTS with your real domain
 □ Generate a new SECRET_KEY (never reuse dev keys)
@@ -367,6 +376,7 @@ Before deploying to production:
 
 
 Security Notes
+
 🔒 Never commit .env — it contains SECRET_KEY and DB credentials.
 
 🔒 Never commit venv/ or node_modules/ — recreate via pip install / npm install.
@@ -381,6 +391,7 @@ Security Notes
 
 
 Contributing
+
 Fork the repository.
 
 Create a feature branch: git checkout -b feature/my-feature
@@ -393,14 +404,18 @@ Open a pull request.
 
 Follow PEP 8 for Python code, and the existing ESLint config for JavaScript. Include tests where practical.
 
+
 License
+
 This project is licensed under the MIT License — see the LICENSE file for details.
 
 Authors
-Triza Museve — Developer — Gitcheche111
+
+Triza Museve — Developer — Gitcheche111~`Briding the gap between ideas and execution`
 
 
 Acknowledgements
+
 Django & Django REST Framework communities for the web framework and API toolkit
 
 djangorestframework-simplejwt for JWT authentication
@@ -419,6 +434,7 @@ AfricasTalking for SMS-based OTP delivery
 
 
 Contact
+
 For questions or issues:
 
 Open an issue on GitHub
