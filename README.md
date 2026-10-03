@@ -390,6 +390,7 @@ Security Notes
 .gitignore enforces the first two. If you ever accidentally commit a secret, treat it as compromised and rotate it immediately.
 
 
+
 Contributing
 
 Fork the repository.
@@ -405,13 +406,15 @@ Open a pull request.
 Follow PEP 8 for Python code, and the existing ESLint config for JavaScript. Include tests where practical.
 
 
+
 License
 
 This project is licensed under the MIT License — see the LICENSE file for details.
 
+
 Authors
 
-Triza Museve — Developer — Gitcheche111~`Briding the gap between ideas and execution`
+Triza Museve — Developer — Gitcheche111~`Bridging the gap between ideas and execution`
 
 
 Acknowledgements
