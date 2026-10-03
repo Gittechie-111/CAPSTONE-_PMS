@@ -1,0 +1,23 @@
+/* This trick is often used to offset a fixed navbar */
+body::before{
+    display: block;
+    content: '';
+    height: 80x;
+}
+ /* body{
+  padding-top: 88px;  
+} */
+
+
+/* 
+nav {
+  outline: 3px solid red;
+}
+
+#home {
+  outline: 3px solid blue;
+}
+
+#about{
+    outline: 3px solid red;
+} */
