@@ -70,8 +70,11 @@ export const proposalService = {
     getMyProposal: async () => (await API.get('proposals/my-proposal/')).data,
     addFeedback: async (proposalId, feedback) =>
         (await API.patch(`proposals/${proposalId}/add-feedback/`, { feedback })).data,
-    reviewProposal: async (proposalId, status) =>
-        (await API.patch(`proposals/${proposalId}/review/`, { status })).data
+    reviewProposal: async (proposalId, status, feedback = '') =>
+        (await API.patch(`proposals/${proposalId}/review/`, { status, feedback })).data,
+    getUnassigned: async () => (await API.get('proposals/unassigned/')).data,
+    appointSupervisor: async (proposalId, supervisorId) =>
+        (await API.patch(`proposals/${proposalId}/appoint/`, { supervisor: supervisorId })).data,
 };
 
 export const projectService = {
@@ -127,6 +130,7 @@ export const adminService = {
     getAllocations: async () => (await API.get('projects/')).data,
     runAutoAllocate: async () => (await API.post('projects/auto-allocate/')).data,
     inviteSupervisor: async (payload) => (await API.post('auth/invite/', payload)).data,
+    getSupervisors: async () => (await API.get('supervisors/')).data,
 };
 
 export const settingsService = {

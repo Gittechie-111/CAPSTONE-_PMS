@@ -27,7 +27,9 @@ from .serializers import SystemSettingsSerializer
 from .notifications import (
     notify, notify_slot_opened, notify_slot_rescheduled,
     notify_slot_completed, notify_slot_cancelled,
+    notify_proposal_submitted, notify_proposal_decision, notify_proposal_feedback,
 )
+from django.db.models import Count, Q
 
 CHAPTER_COUNT = 5
 
@@ -69,7 +71,7 @@ class ProjectProposalViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated] 
 
     def get_permissions(self):
-        if self.action in ['review', 'add_feedback', 'my_proposal']:
+        if self.action in ['review', 'add_feedback', 'my_proposal', 'unassigned', 'appoint']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStudentRole()]
     
@@ -99,7 +101,7 @@ class ProjectProposalViewSet(viewsets.ModelViewSet):
         if not proposal:
             return Response({"error": "No active proposal found."}, status=404)
         
-        data = ProjectProposalSerializer(proposal).data
+        data = ProjectProposalSerializer(proposal,context={'request': request}).data
         
         # Add milestone completion status if proposal is approved
         if proposal.status == 'APPROVED':
@@ -150,45 +152,82 @@ class ProjectProposalViewSet(viewsets.ModelViewSet):
             )
 
         research_area = serializer.validated_data.get('research_area')
+   
 
-        matching_supervisors = SupervisorProfile.objects.filter(
-            research_area=research_area,
-            current_count__lt=F('max_capacity')
-        ).order_by('current_count')
+        def with_space(qs):
+            return (
+                qs.annotate(load=Count('received_proposals',
+                                       filter=Q(received_proposals__status__in=['PENDING', 'APPROVED'])))
+                  .filter(load__lt=F('max_capacity'))
+                  .order_by('load')
+            )
 
-        assigned_supervisor = matching_supervisors.first()
+        assigned_supervisor = with_space(SupervisorProfile.objects.filter(research_area=research_area)).first()
 
-        # if not assigned_supervisor:
-        #     any_available = SupervisorProfile.objects.filter(
-        #         current_count__lt=F('max_capacity')
-        #     ).order_by('current_count')
-        #     assigned_supervisor = any_available.first()
+        # Option A: uncomment to overflow to any supervisor with space.
+        # Leave commented to use Option B (unassigned proposals go to the coordinator).
+        # if assigned_supervisor is None:
+        #     assigned_supervisor = with_space(SupervisorProfile.objects.all()).first()
 
-        serializer.save(student=self.request.user, appointed_supervisor=assigned_supervisor)
+        proposal = serializer.save(student=self.request.user, appointed_supervisor=assigned_supervisor)
+        notify_proposal_submitted(proposal)
 
-    @action(detail=True, methods=['patch'], url_path='review')
+    @action(detail=False, methods=['get'], url_path='unassigned')
+    def unassigned(self, request):
+        if not (request.user.role == 'ADMIN' or request.user.is_superuser):
+            return Response({"error": "Only the coordinator can view this."}, status=403)
+        qs = ProjectProposal.objects.filter(
+            status='PENDING', appointed_supervisor__isnull=True
+        ).order_by('created_at')
+        return Response(ProjectProposalSerializer(qs, many=True, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='appoint')
+    def appoint(self, request, pk=None):
+        if not (request.user.role == 'ADMIN' or request.user.is_superuser):
+            return Response({"error": "Only the coordinator can appoint a supervisor."}, status=403)
+        proposal = self.get_object()
+        try:
+            supervisor = SupervisorProfile.objects.get(pk=request.data.get('supervisor'))
+        except (SupervisorProfile.DoesNotExist, ValueError, TypeError):
+            return Response({"error": "Choose a valid supervisor."}, status=400)
+
+        load = ProjectProposal.objects.filter(
+            appointed_supervisor=supervisor, status__in=['PENDING', 'APPROVED']
+        ).count()
+        if load >= supervisor.max_capacity:
+            return Response({"error": "That supervisor is already at capacity."}, status=400)
+
+        proposal.appointed_supervisor = supervisor
+        proposal.save()
+        notify_proposal_submitted(proposal)
+        return Response(ProjectProposalSerializer(proposal, context={'request': request}).data)
+
+    @action(detail=True, methods=['patch'], url_path='review')  
     def review(self, request, pk=None):
         proposal = self.get_object()
 
         if request.user.role != 'LECTURER':
             return Response({"error": "Only lecturers can review proposals."}, status=403)
-
         if not proposal.appointed_supervisor or proposal.appointed_supervisor.user != request.user:
-            return Response(
-                {"error": "You can only review proposals sent to you."},
-                status=403
-            )
+            return Response({"error": "You can only review proposals sent to you."}, status=403)
+        if proposal.status != 'PENDING':
+            return Response({"error": "This topic has already been reviewed."}, status=400)
 
         new_status = request.data.get('status')
         if new_status not in ['APPROVED', 'REJECTED']:
-            return Response(
-                {"error": "status must be 'APPROVED' or 'REJECTED'."},
-                status=400
-            )
+            return Response({"error": "status must be 'APPROVED' or 'REJECTED'."}, status=400)
+
+        feedback = (request.data.get('feedback') or '').strip()
+        if new_status == 'REJECTED' and not feedback and not proposal.supervisor_feedback:
+            return Response({"error": "Give a reason when rejecting a topic."}, status=400)
+        if feedback:
+            proposal.supervisor_feedback = feedback
+            proposal.feedback_updated_at = timezone.now()
 
         proposal.status = new_status
         proposal.save()
-        return Response(ProjectProposalSerializer(proposal).data)
+        notify_proposal_decision(proposal)
+        return Response(ProjectProposalSerializer(proposal, context={'request': request}).data)
 
     @action(detail=True, methods=['patch'], url_path='add-feedback')
     def add_feedback(self, request, pk=None):
@@ -215,6 +254,7 @@ class ProjectProposalViewSet(viewsets.ModelViewSet):
         proposal.supervisor_feedback = feedback
         proposal.feedback_updated_at = timezone.now()
         proposal.save()
+        notify_proposal_feedback(proposal)
 
         return Response({
             "message": "Feedback added successfully.",

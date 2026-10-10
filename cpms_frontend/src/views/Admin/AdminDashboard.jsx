@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { adminService } from '../../services/api';
+import { adminService, meetingSlotService, meetingBookingService, proposalService } from '../../services/api';
 
 const NAV_ITEMS = [
     { id: 'automated-allocation', label: 'Dashboard', icon: '🏠' },
@@ -28,10 +28,15 @@ const AdminDashboard = () => {
     const [invite, setInvite] = useState({ username: '', email: '', phone_number: '', expertise: '', research_area: 'AI_ML', max_capacity: 5 });
     const [inviting, setInviting] = useState(false);
     const [inviteResult, setInviteResult] = useState(null);
+    const [unassigned, setUnassigned] = useState([]);
+    const [supervisors, setSupervisors] = useState([]);
+    const [pick, setPick] = useState({});
 
     const scrollToSection = (id) => {
         document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
+
+    
 
     const loadData = async () => {
         setLoading(true);
@@ -43,6 +48,15 @@ const AdminDashboard = () => {
         } finally {
             setLoading(false);
         }
+    const [allocData, slotData, bookingData, unassignedData, supData] = await Promise.all([
+        adminService.getAllocations(),
+        meetingSlotService.getSlots(),
+        meetingBookingService.getBookings(),
+        proposalService.getUnassigned(),
+        adminService.getSupervisors(),
+        ]);
+    setUnassigned(unassignedData);
+    setSupervisors(supData);
     };
 
     useEffect(() => {
@@ -62,6 +76,16 @@ const AdminDashboard = () => {
             setError(err.response?.data?.error || 'Could not appoint this supervisor.');
         } finally {
             setInviting(false);
+        }
+    };
+
+    const handleAppoint = async (proposalId) => {
+        setError('');
+        try {
+            await proposalService.appointSupervisor(proposalId, pick[proposalId]);
+            await loadData();
+        } catch (err) {
+            setError(err.response?.data?.error || 'Could not appoint that supervisor.');
         }
     };
 
@@ -219,6 +243,47 @@ const AdminDashboard = () => {
                                 </div>
                             )}
                         </section>
+                        {unassigned.length > 0 && (
+                            <section id="unassigned" className="border-t border-white/10 pt-8 scroll-mt-6">
+                                <h2 className="text-sm font-semibold text-white tracking-wide mb-1">
+                                    Proposals Awaiting a Supervisor ({unassigned.length})
+                                </h2>
+                                <p className="text-xs text-slate-300 mb-4">
+                                    Every supervisor in these students' research areas is at capacity. Appoint one so the topic can be reviewed.
+                                </p>
+                                <div className="space-y-2">
+                                    {unassigned.map((p) => (
+                                        <div key={p.id} className="border border-amber-400/30 bg-amber-500/5 rounded-lg px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm text-white truncate">{p.title}</p>
+                                                <p className="text-xs text-slate-400">{p.student_details?.username} • {p.research_area}</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={pick[p.id] || ''}
+                                                    onChange={(e) => setPick({ ...pick, [p.id]: e.target.value })}
+                                                    className="px-2 py-1.5 text-sm border border-white/15 bg-slate-900/30 rounded text-white"
+                                                >
+                                                    <option value="">Choose supervisor...</option>
+                                                    {supervisors.map((s) => (
+                                                        <option key={s.id} value={s.id}>
+                                                            {s.user_details?.username} ({s.research_area})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => handleAppoint(p.id)}
+                                                    disabled={!pick[p.id]}
+                                                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded disabled:opacity-50"
+                                                >
+                                                    Appoint
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                         <section id="automated-allocation" className="border-t border-white/10 pt-8 scroll-mt-6">
                             <div className="flex justify-between items-center mb-2">
                                 <h2 className="text-sm font-semibold text-white tracking-wide">Automated Allocation</h2>

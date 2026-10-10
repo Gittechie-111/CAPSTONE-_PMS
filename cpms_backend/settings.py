@@ -16,25 +16,14 @@ from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
-
-from decouple import config, Csv
-
+# Core
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost', cast=Csv())
 
 # Database
-# https://docs.djangoproject.com/en/6.1/ref/settings/#databases
-
-# DATABASES = # cpms_backend/settings.py
-
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -46,15 +35,7 @@ DATABASES = {
     }
 }
 
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173',
-    cast=Csv(),
-)
-
-
-# Application definition
-
+# Apps
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -63,11 +44,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Third-Party Apps
+    # Third-party
     'rest_framework',
     'corsheaders',
-    
-    # My Core App
+
+    # Local
     'core',
 ]
 
@@ -82,23 +63,23 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Allow your React/Vue frontend to communicate with Django
-CORS_ALLOW_ALL_ORIGINS = True  # For development purposes
-
-# Allow browser credentials (like authentication sessions/cookies) across ports
+# CORS
+# Only the origins listed in .env may call the API (no more allow-all)
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:5173,http://127.0.0.1:5173',
+    cast=Csv(),
+)
 CORS_ALLOW_CREDENTIALS = True
 
-# Tell Django to use our custom User model instead of the default one
 AUTH_USER_MODEL = 'core.User'
-
-
-
 ROOT_URLCONF = 'cpms_backend.urls'
+WSGI_APPLICATION = 'cpms_backend.wsgi.application'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -110,82 +91,14 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'cpms_backend.wsgi.application'
-
-
-
-# Password validation
-# https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-
-
-
-# Configure Django REST Framework to use JWT authentication globally
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
-}
-
-# Customize your token lifetimes for security
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),     # Token valid for 1 hour
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),        # Users stay logged in for 7 days
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,                          # Uses your unique Django secret key
-    'AUTH_HEADER_TYPES': ('Bearer',),                   # Sent in headers as "Bearer <token>"
-}
-
-
-# Internationalization
-# https://docs.djangoproject.com/en/6.1/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'Africa/Nairobi'
-
-USE_I18N = True
-
-USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.1/howto/static-files/
-
-STATIC_URL = 'static/'
-
-
-# Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
-
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
-
-
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
+# REST + JWT
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -195,15 +108,61 @@ REST_FRAMEWORK = {
     },
 }
 
-FRONTEND_URL = 'http://localhost:5173'
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
 
-# 'console' prints SMS to the Django terminal; switch to 'africastalking' when you have an account
-SMS_BACKEND = 'console'
-AT_USERNAME = 'sandbox'
-AT_API_KEY = ''      # load from an environment variable in real use, never commit it
+# i18n
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'Africa/Nairobi'
+USE_I18N = True
+USE_TZ = True
+
+# Static / media
+STATIC_URL = 'static/'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+#  Email
+# Real emails are sent once EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are set in .env.
+# Until then, emails are printed in the Django terminal.
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_TIMEOUT = 60
+
+if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or 'cpms@localhost'
+
+# App-specific
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+
+# 'console' prints SMS in the terminal; 'africastalking' sends real SMS (needs a live account + key)
+SMS_BACKEND = config('SMS_BACKEND', default='console')
+AT_USERNAME = config('AT_USERNAME', default='sandbox')
+AT_API_KEY = config('AT_API_KEY', default='')
 AT_URL = 'https://api.africastalking.com/version1/messaging'
 
-# Roles that must pass an SMS code after the password.
-# Add 'ADMIN' once the admin's phone number is saved, and 'STUDENT' once every student has one.
+# Roles that must pass a one-time code after the password
 OTP_REQUIRED_ROLES = ['LECTURER', 'PANELIST']
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {
+        'core': {'handlers': ['console'], 'level': 'INFO'},
+    },
+}

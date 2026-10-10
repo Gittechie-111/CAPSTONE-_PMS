@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import User, AllocatedProject, SupervisorProfile, ProjectProposal
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import SystemSettings, Notification
+from .models import Milestone, Submission, MeetingSlot, MeetingBooking
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -47,8 +48,16 @@ class ProjectProposalSerializer(serializers.ModelSerializer):
             'created_at', 'feedback_updated_at'
         ]
         read_only_fields = ['student', 'status', 'appointed_supervisor', 'feedback_updated_at']
+        def to_representation(self, instance):
+            data = super().to_representation(instance)
+            request = self.context.get('request')
+            user = getattr(request, 'user', None)
+            if user and getattr(user, 'role', None) == 'STUDENT':
+                if not AllocatedProject.objects.filter(student=instance.student).exists():
+                    data['appointed_supervisor'] = None
+                    data['appointed_supervisor_details'] = None
+            return data
 
-from .models import Milestone, Submission, MeetingSlot, MeetingBooking
 
 
 # 📈 MILESTONE & SUBMISSION SERIALIZERS

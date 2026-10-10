@@ -60,7 +60,11 @@ const Login = () => {
             }
             navigate(`/dashboard/${result.role.toLowerCase()}`);
         } catch (err) {
-            setError(err.response?.data?.detail || 'Invalid username or password.');
+            setError(
+                err.response
+                    ? (err.response.data?.detail || 'Invalid username or password.')
+                    : 'Cannot reach the server. Is the backend running?'
+            );
         } finally {
             setSubmitting(false);
         }

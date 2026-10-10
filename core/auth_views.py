@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from .models import User, LoginOTP, StaffInvite, SupervisorProfile, RESEARCH_AREA_CHOICES
 from .serializers import MyTokenObtainPairSerializer
 from .sms import send_sms
+from .email_utils import send_email
 
 OTP_ROLES = getattr(settings, 'OTP_REQUIRED_ROLES', ['LECTURER', 'PANELIST'])
 OTP_TTL = timedelta(minutes=5)
@@ -51,7 +52,7 @@ class LoginView(APIView):
             return Response({'detail': 'Invalid username or password.'}, status=400)
 
         if user.role in OTP_ROLES:
-            if not user.phone_number:
+            if not user.phone_number and not user.email:
                 return Response(
                     {'detail': 'No phone number is registered for this account. Contact the project coordinator.'},
                     status=403,
@@ -64,14 +65,16 @@ class LoginView(APIView):
                 code_hash=make_password(code),
                 expires_at=timezone.now() + OTP_TTL,
             )
-            send_sms(user.phone_number, f"CPMS login code: {code}. Valid for 5 minutes. Never share it.")
+            message = f"Your CPMS login code is {code}. It expires in 5 minutes. Never share it with anyone."
+            if user.phone_number and settings.SMS_BACKEND != 'console':
+                send_sms(user.phone_number, f"CPMS login code: {code}. Valid for 5 minutes. Never share it.")
+            send_email(user.email, "Your CPMS login code", message)
             return Response({
                 'otp_required': True,
                 'challenge_id': otp.challenge,
-                'phone_hint': '••••' + user.phone_number[-3:],
+                'phone_hint': ('••••' + user.phone_number[-3:]) if user.phone_number else None,
+                'email_hint': user.email,
             })
-
-        return Response(issue_tokens(user))
 
 
 class VerifyOTPView(APIView):
@@ -150,7 +153,12 @@ class InviteSupervisorView(APIView):
             phone,
             f"You have been appointed as a supervisor on CPMS. Set up your account (valid 48h): {link}",
         )
-        body = {'message': f'Supervisor {username} appointed.', 'sms_sent': sent}
+        email_sent = send_email(
+            email,
+            "You've been appointed as a CPMS supervisor",
+            f"You have been appointed as a supervisor on CPMS. Set up your account (link valid 48 hours): {link}",
+        )
+        body = {'message': f'Supervisor {username} appointed.', 'sms_sent': sent, 'email_sent': email_sent}
         if settings.DEBUG:
             body['activation_link'] = link        # convenient for local testing only
         return Response(body, status=201)

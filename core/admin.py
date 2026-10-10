@@ -5,19 +5,23 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     User, SupervisorProfile, ProjectProposal, AllocatedProject, 
     Milestone, Submission, MeetingSlot, MeetingBooking, 
-    GradingCriteria, PanelGrade
+    GradingCriteria, PanelGrade, SystemSettings
 )
 
+@admin.register(SystemSettings)
+class SystemSettingsAdmin(admin.ModelAdmin):
+    list_display = ('__str__', 'proposal_deadline')
+    
 # Customizing the layout for your User account management
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     list_display = ('username', 'email', 'role', 'phone_number', 'is_staff')
     list_filter = ('role', 'is_staff', 'is_superuser')
     fieldsets = UserAdmin.fieldsets + (
-        ('CPMS Role Information', {'fields': ('role', 'phone_number')}),
+        ('CPMS Role Information', {'fields': ('role', 'phone_number', 'registration_number')}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('CPMS Role Information', {'fields': ('role', 'phone_number')}),
+        ('CPMS Role Information', {'fields': ('email', 'role', 'phone_number', 'registration_number')}),
     )
 
 #Intelligent Auto-Allocation Logic
@@ -31,9 +35,10 @@ class ProjectProposalAdmin(admin.ModelAdmin):
     list_display = ('title', 'student', 'appointed_supervisor', 'status', 'created_at')
     list_filter = ('status', 'created_at')
     search_fields = ('title', 'student__username', 'appointed_supervisor__user__username')
-    
-    # Register our new smart action item
-    actions = ['run_intelligent_auto_allocation', 'reject_proposals']
+    readonly_fields = ('status',)   # only lecturers change this, through the app
+
+    # # Register our new smart action item
+    # actions = ['reject_proposals']
 
     def run_intelligent_auto_allocation(self, request, queryset):
         allocated_count = 0
@@ -92,18 +97,18 @@ class AllocatedProjectAdmin(admin.ModelAdmin):
 
 @admin.register(Milestone)
 class MilestoneAdmin(admin.ModelAdmin):
-    list_display = ('title', 'due_date', 'weight')
+    list_display = ('title', 'due_date', 'weight', 'has_chapters')
     list_filter = ('due_date',)
 
 @admin.register(Submission)
 class SubmissionAdmin(admin.ModelAdmin):
-    list_display = ('project', 'milestone', 'status', 'submitted_at')
+    list_display = ('project', 'milestone', 'chapter', 'status', 'submitted_at')
     list_filter = ('status', 'submitted_at', 'milestone')
     search_fields = ('project__title', 'project__student__username')
 
 @admin.register(MeetingSlot)
 class MeetingSlotAdmin(admin.ModelAdmin):
-    list_display = ('supervisor', 'start_time', 'end_time', 'capacity', 'status')
+    list_display = ('supervisor', 'start_time', 'end_time', 'capacity', 'get_booked_count', 'status')
     list_filter = ('status', 'start_time', 'supervisor')
     search_fields = ('supervisor__user__username',)
     readonly_fields = ('created_at',)

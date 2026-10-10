@@ -1,6 +1,7 @@
 from django.db.models import Q
 from django.utils import timezone
 from .models import Notification, MeetingSlot, User
+from .email_utils import send_email
 
 REMINDER_KINDS = ['MEETING_REMINDER_24H', 'MEETING_REMINDER_1H']
 
@@ -76,3 +77,38 @@ def notify_slot_cancelled(slot, students, reason):
     for student in students:
         notify(student, 'SLOT_CANCELLED',
                f"Your meeting with {name} on {fmt(slot.start_time)} was cancelled. Reason: {reason}. {extra}", slot)
+
+
+def notify_proposal_submitted(proposal):
+    """Tells the routed lecturer a new topic is waiting."""
+    supervisor = proposal.appointed_supervisor
+    if not supervisor:
+        return
+    notify(
+        supervisor.user, 'PROPOSAL_SUBMITTED',
+        f'New topic from {proposal.student.username}: "{proposal.title}". Open Topics to Review to look at it.',
+    )
+
+
+def notify_proposal_decision(proposal):
+    student = proposal.student
+    feedback = f" Feedback: {proposal.supervisor_feedback}" if proposal.supervisor_feedback else ""
+    if proposal.status == 'APPROVED':
+        kind = 'PROPOSAL_APPROVED'
+        subject = 'Your CPMS topic was approved'
+        message = (f'Your topic "{proposal.title}" was approved.{feedback} '
+                   f'Your supervisor will be confirmed once the coordinator runs allocation.')
+    else:
+        kind = 'PROPOSAL_REJECTED'
+        subject = 'Your CPMS topic needs changes'
+        message = (f'Your topic "{proposal.title}" was not approved.{feedback} '
+                   f'You can submit a revised topic from your dashboard.')
+    notify(student, kind, message)
+    send_email(student.email, subject, message)
+
+
+def notify_proposal_feedback(proposal):
+    notify(
+        proposal.student, 'PROPOSAL_FEEDBACK',
+        f'The reviewing lecturer left feedback on "{proposal.title}": {proposal.supervisor_feedback}',
+    )

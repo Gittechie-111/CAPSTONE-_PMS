@@ -11,6 +11,10 @@ from core.auth_views import (LoginView, VerifyOTPView, InviteSupervisorView, Act
 from rest_framework_simplejwt.views import  TokenRefreshView
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
+
+def api_root(request):
+    return JsonResponse({"service": "CPMS API", "docs": "/api/", "admin": "/admin/"})
 
 # Create a router and register our viewsets with it.
 router = DefaultRouter()
@@ -29,6 +33,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 
 
 urlpatterns = [
+    path('', api_root),
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/auth/login/', LoginView.as_view(), name='auth_login'),

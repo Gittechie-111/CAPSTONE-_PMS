@@ -32,7 +32,7 @@ const RESEARCH_AREAS = [
 
 const NAV_ITEMS = [
     { id: 'milestone-progress', label: 'Dashboard', icon: '🏠' },
-    { id: 'proposal-report', label: 'Proposal', icon: '📄' },
+    { id: 'proposal-report', label: 'Proposal Topic', icon: '📄' },
     { id: 'submit-work', label: 'Submit Work', icon: '📤' },
     { id: 'my-bookings', label: 'Upcoming Meetings', icon: '📅' },
     { id: 'consultation-slots', label: 'Consultation Slots', icon: '🗓️' },
@@ -261,6 +261,8 @@ const StudentDashboard = () => {
     // });
 
     const upcomingBooking = bookings.find((b) => b.status === 'BOOKED');
+    // appointed_supervisor_details is only sent once the coordinator has allocated this student
+    const allocated = !!proposal?.appointed_supervisor_details;
 
     if (loading) return <div className="p-8">Loading dashboard...</div>;
 
@@ -359,12 +361,18 @@ const StudentDashboard = () => {
                         </div>
 
                         <div className="space-y-4">
-                            {proposal && (
-                                <div className="flex items-center gap-3 border rounded-lg px-5 py-4 border-emerald-400/40 bg-emerald-500/10">
-                                    <span>✅</span>
-                                    <span className="text-sm text-emerald-200">Proposal Submission — Completed</span>
-                                </div>
-                            )}
+                                {proposal && (
+                                   <div className={`flex items-center gap-3 border rounded-lg px-5 py-4 ${
+                                       proposal.status === 'APPROVED'
+                                           ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
+                                           : 'border-amber-400/40 bg-amber-500/10 text-amber-200'
+                                   }`}>
+                                       <span>{proposal.status === 'APPROVED' ? '✅' : '⏳'}</span>
+                                       <span className="text-sm">
+                                           Proposal Topic & Description — {proposal.status === 'APPROVED' ? 'Approved' : 'Awaiting supervisor review'}
+                                       </span>
+                                   </div>
+                               )}
 
                             {milestones.map((m) => {
                                 const due = new Date(m.due_date);
@@ -452,7 +460,7 @@ const StudentDashboard = () => {
                     {proposal && (
                         <section id="proposal-report" className="border-t border-white/10 pt-8 mb-12 scroll-mt-6">
                             <h2 className="text-sm font-semibold text-white tracking-wide mb-4">
-                                Proposal Report
+                                Proposal Topic & Description
                             </h2>
                             <div className="space-y-5">
                                 <div>
@@ -465,16 +473,20 @@ const StudentDashboard = () => {
                                 </div>
                                 {proposal.appointed_supervisor_details && (
                                     <div>
-                                        <p className="text-[11px] text-slate-400 uppercase font-semibold mb-1">
-                                            Assigned Supervisor
-                                        </p>
-                                        <p className="text-sm text-slate-100">
-                                            {proposal.appointed_supervisor_details.user_details?.username}
-                                        </p>
-                                        <p className="text-xs text-slate-400">
-                                            {proposal.appointed_supervisor_details.user_details?.email || 'No email on file'}
-                                        </p>
-                                    </div>
+                                       <p className="text-[11px] text-slate-400 uppercase font-semibold mb-1">Appointed Supervisor</p>
+                                       {proposal.appointed_supervisor_details ? (
+                                           <>
+                                               <p className="text-sm text-slate-100">{proposal.appointed_supervisor_details.user_details?.username}</p>
+                                               <p className="text-xs text-slate-400">{proposal.appointed_supervisor_details.user_details?.email || 'No email on file'}</p>
+                                           </>
+                                       ) : (
+                                           <p className="text-sm text-slate-300">
+                                               {proposal.status === 'APPROVED'
+                                                   ? 'Your topic is approved. Your supervisor will appear here once the coordinator runs allocation.'
+                                                   : 'Your topic is with the lecturer reviewing your research area. Once it is approved and the coordinator runs allocation, your appointed supervisor will appear here.'}
+                                           </p>
+                                       )}
+                                   </div>
                                 )}
                                 <div className="flex justify-between items-center pt-2">
                                     <div>
@@ -587,7 +599,11 @@ const StudentDashboard = () => {
                         <h2 className="text-sm font-semibold text-white tracking-wide mb-4">
                             Submit Work
                         </h2>
-                        {uploadTargets.length === 0 ? (
+                            {!allocated ? (
+                               <p className="text-sm text-slate-300">
+                                   Thesis chapter and prototype uploads open once your topic is approved and the coordinator has allocated your supervisor.
+                               </p>
+                           ) : uploadTargets.length === 0 ? (
                             <p className="text-sm text-white/70">Everything is submitted. Nothing more to upload right now.</p>
                         ) : (
                             <form onSubmit={handleUpload} className="space-y-5 max-w-xl">
@@ -624,7 +640,7 @@ const StudentDashboard = () => {
                                         id="file-upload"
                                         name="file_upload"
                                         type="file"
-                                        accept=".pdf,.doc,.docx"
+                                        accept=".pdf,.docx"
                                         onChange={(e) => setFile(e.target.files[0])}
                                         className="w-full text-sm text-white file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700"
                                     />
@@ -849,7 +865,7 @@ const StudentDashboard = () => {
                             </div>
                             {proposal?.appointed_supervisor_details && (
                                 <div className="flex justify-between border-b border-white/10 pb-2">
-                                    <span className="text-slate-400">Assigned Supervisor</span>
+                                    <span className="text-slate-400">Appointed Supervisor</span>
                                     <span className="text-white">
                                         {proposal.appointed_supervisor_details.user_details?.username}
                                     </span>
