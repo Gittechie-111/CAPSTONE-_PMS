@@ -442,7 +442,7 @@ For questions or issues:
 
 Open an issue on GitHub
 
-Email: trizahmuseve@gmail.com
+Email: trizahmuseve69@gmail.com
 
 
 
