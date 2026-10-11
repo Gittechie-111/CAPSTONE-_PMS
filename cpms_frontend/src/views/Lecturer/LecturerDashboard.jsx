@@ -57,6 +57,10 @@ const LecturerDashboard = () => {
     const [viewingSubmission, setViewingSubmission] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
     const [viewerFile, setViewerFile] = useState(null);
+    const [subTab, setSubTab] = useState('THESIS');
+    const [subSearch, setSubSearch] = useState('');
+    const [subFilter, setSubFilter] = useState('ALL');
+    const [subLimit, setSubLimit] = useState(10);
 
     const API_BASE = 'http://127.0.0.1:8000';
     const toAbsoluteUrl = (url) => {
@@ -481,49 +485,113 @@ const LecturerDashboard = () => {
 
                         {/* Student Submissions */}
                         <section id="student-submissions" className="border-t border-white/10 pt-8 scroll-mt-6">
-                            <h2 className="text-sm font-semibold text-white tracking-wide mb-4">Student Submissions</h2>
-                            {submissions.length === 0 ? (
-                                <p className="text-sm text-white/80">No submissions yet.</p>
-                            ) : (
-                                Object.entries(groupSubmissionsByStudent()).map(([username, subs]) => {
-                                    const chapterSubs = subs.filter((s) => s.milestone_details?.has_chapters);
-                                    const otherSubs = subs.filter((s) => !s.milestone_details?.has_chapters);
+                            {(() => {
+                                const isThesis = (s) => !!s.milestone_details?.has_chapters;
+                                const needsReview = (thesis) =>
+                                    submissions.filter((s) => s.status === 'PENDING' && isThesis(s) === thesis).length;
 
-                                    const subButton = (sub, label, key) =>
-                                        sub ? (
-                                            <button
-                                                key={key}
-                                                onClick={() => setViewingSubmission(sub)}
-                                                className="text-xs border border-white/10 text-slate-200 hover:text-white hover:border-white/30 px-3 py-1.5 rounded transition-colors"
-                                            >
-                                                {label}
-                                                {sub.status === 'PENDING' && <span className="ml-1.5 text-amber-300">•</span>}
-                                                {sub.status === 'REVISIONS' && <span className="ml-1.5 text-orange-300">↻</span>}
-                                                {sub.status === 'APPROVED' && <span className="ml-1.5 text-emerald-300">✓</span>}
-                                            </button>
-                                        ) : (
-                                            <button key={key} disabled className="text-xs border border-white/5 text-slate-600 px-3 py-1.5 rounded cursor-not-allowed">
-                                                {label}
-                                            </button>
-                                        );
+                                const tabSubs = submissions.filter((s) => isThesis(s) === (subTab === 'THESIS'));
+                                const byStudent = tabSubs.reduce((acc, s) => {
+                                    const name = s.project_details?.student_details?.username || 'Unknown';
+                                    (acc[name] = acc[name] || []).push(s);
+                                    return acc;
+                                }, {});
 
-                                    return (
-                                        <div key={username} className="border border-white/15 bg-slate-900/20 rounded-lg p-4 mb-3">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="text-sm font-medium text-white">{username}</p>
-                                                    <p className="text-xs text-slate-400">{subs.length} submission{subs.length !== 1 ? 's' : ''}</p>
-                                                </div>
+                                const term = subSearch.trim().toLowerCase();
+                                const rows = Object.entries(byStudent)
+                                    .filter(([name]) => !term || name.toLowerCase().includes(term))
+                                    .filter(([, subs]) => subFilter === 'ALL' || subs.some((s) => s.status === subFilter))
+                                    .sort(([, a], [, b]) =>
+                                        b.filter((s) => s.status === 'PENDING').length - a.filter((s) => s.status === 'PENDING').length
+                                    );
+
+                                const subButton = (sub, label, key) =>
+                                    sub ? (
+                                        <button
+                                            key={key}
+                                            onClick={() => setViewingSubmission(sub)}
+                                            className="text-xs border border-white/10 text-slate-200 hover:text-white hover:border-white/30 px-3 py-1.5 rounded transition-colors"
+                                        >
+                                            {label}
+                                            {sub.status === 'PENDING' && <span className="ml-1.5 text-amber-300">•</span>}
+                                            {sub.status === 'REVISIONS' && <span className="ml-1.5 text-orange-300">↻</span>}
+                                            {sub.status === 'APPROVED' && <span className="ml-1.5 text-emerald-300">✓</span>}
+                                        </button>
+                                    ) : (
+                                        <button key={key} disabled className="text-xs border border-white/5 text-slate-600 px-3 py-1.5 rounded cursor-not-allowed">
+                                            {label}
+                                        </button>
+                                    );
+
+                                return (
+                                    <>
+                                        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                            <div className="flex gap-2">
+                                                {[['THESIS', 'Thesis chapters', true], ['PROTOTYPE', 'System prototype', false]].map(([key, label, thesis]) => (
+                                                    <button
+                                                        key={key}
+                                                        onClick={() => { setSubTab(key); setSubLimit(10); }}
+                                                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                                                            subTab === key ? 'bg-blue-600 border-blue-500 text-white' : 'border-white/10 text-slate-300 hover:text-white'
+                                                        }`}
+                                                    >
+                                                        {label}
+                                                        {needsReview(thesis) > 0 && (
+                                                            <span className="ml-2 bg-amber-500 text-slate-950 rounded-full px-1.5 text-[10px] font-semibold">
+                                                                {needsReview(thesis)}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                ))}
                                             </div>
-                                            <div className="mt-3 flex flex-wrap gap-2 items-center">
-                                                <span className="text-[11px] text-slate-400 uppercase mr-1">Thesis</span>
-                                                {CHAPTERS.map((ch) => subButton(chapterSubs.find((s) => s.chapter === ch), `Ch ${ch}`, `ch-${ch}`))}
-                                                {otherSubs.map((s) => subButton(s, s.milestone_details?.title, `s-${s.id}`))}
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={subSearch}
+                                                    onChange={(e) => { setSubSearch(e.target.value); setSubLimit(10); }}
+                                                    placeholder="Search student..."
+                                                    className="px-3 py-1.5 text-xs border border-white/15 bg-slate-900/30 rounded text-white placeholder:text-slate-500 w-44"
+                                                />
+                                                <select
+                                                    value={subFilter}
+                                                    onChange={(e) => { setSubFilter(e.target.value); setSubLimit(10); }}
+                                                    className="px-2 py-1.5 text-xs border border-white/15 bg-slate-900/30 rounded text-white"
+                                                >
+                                                    <option value="ALL">All statuses</option>
+                                                    <option value="PENDING">Needs review</option>
+                                                    <option value="REVISIONS">Revisions requested</option>
+                                                    <option value="APPROVED">Approved</option>
+                                                </select>
                                             </div>
                                         </div>
-                                    );
-                                })
-                            )}
+
+                                        {rows.length === 0 ? (
+                                            <p className="text-sm text-white/80">Nothing to show.</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {rows.slice(0, subLimit).map(([name, subs]) => (
+                                                    <div key={name} className="border border-white/15 bg-slate-900/20 rounded-lg px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                                                        <p className="text-sm text-white">{name}</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {subTab === 'THESIS'
+                                                                ? CHAPTERS.map((ch) => subButton(subs.find((s) => s.chapter === ch), `Ch ${ch}`, `ch-${ch}`))
+                                                                : subs.map((s) => subButton(s, s.milestone_details?.title || 'Prototype', `s-${s.id}`))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {rows.length > subLimit && (
+                                                    <button
+                                                        onClick={() => setSubLimit(subLimit + 10)}
+                                                        className="text-xs text-blue-300 hover:text-blue-200 underline"
+                                                    >
+                                                        Show more ({rows.length - subLimit} remaining)
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </section>
 
                         {/* Your Meeting Slots */}

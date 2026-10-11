@@ -3,7 +3,7 @@ import { renderAsync } from 'docx-preview';
 
 const IMAGE_TYPES = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
 const TEXT_TYPES = ['txt', 'md', 'csv'];
-const extOf = (url = '') => url.split('?')[0].split('.').pop().toLowerCase();
+const extOf = (url) => (url || '').split('?')[0].split('.').pop().toLowerCase();
 
 const FileViewer = ({ url, title, onClose }) => {
     const [view, setView] = useState({ kind: 'loading' });
@@ -11,6 +11,11 @@ const FileViewer = ({ url, title, onClose }) => {
     const ext = extOf(url);
 
     useEffect(() => {
+        if (!url) {
+            setView({ kind: 'error', message: 'No file is attached to this submission. Ask the student to upload it again.' });
+            return;
+        }
+
         let objectUrl = null;
         let cancelled = false;
 
@@ -61,7 +66,7 @@ const FileViewer = ({ url, title, onClose }) => {
                 <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
                     <p className="text-sm font-medium text-white truncate">{title}</p>
                     <div className="flex items-center gap-3 shrink-0">
-                        <a href={url} download className="text-xs text-blue-300 hover:text-blue-200 underline">Download</a>
+                        {url && <a href={url} download className="text-xs text-blue-300 hover:text-blue-200 underline">Download</a>}
                         <button onClick={onClose} className="text-xs border border-white/10 text-slate-300 hover:text-white px-3 py-1.5 rounded">
                             Close
                         </button>
@@ -70,11 +75,10 @@ const FileViewer = ({ url, title, onClose }) => {
 
                 <div className="flex-1 overflow-auto">
                     {view.kind === 'loading' && <p className="p-6 text-sm text-slate-300">Loading document…</p>}
-                    {view.kind === 'error' && <p className="p-6 text-sm text-red-300">Could not load the file ({view.message}).</p>}
+                    {view.kind === 'error' && <p className="p-6 text-sm text-red-300">{view.message}</p>}
                     {view.kind === 'unsupported' && (
                         <p className="p-6 text-sm text-slate-300">
-                            This file type can't be previewed in the browser (older .doc, .pptx and others).
-                            Use Download above, or ask for a PDF or .docx.
+                            This file type can't be previewed in the browser. Use Download above.
                         </p>
                     )}
                     {view.kind === 'frame' && <iframe src={view.src} title={title} className="w-full h-full bg-white" />}

@@ -110,7 +110,8 @@ const Login = () => {
                         {otpChallenge ? (
                         <form onSubmit={handleVerify} className="space-y-5">
                             <p className="text-sm text-slate-300">
-                                We sent a 6-digit code to the phone ending {otpChallenge.phoneHint}.
+                                We emailed a 6-digit code to {otpChallenge.emailHint || 'your registered email'}.
+                                It expires in 5 minutes.
                             </p>
                             <input
                                 id="login-otp"

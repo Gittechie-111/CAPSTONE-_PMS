@@ -146,6 +146,8 @@ export const milestoneAdminService = {
 
 export const notificationService = {
     getNotifications: async () => (await API.get('notifications/')).data,
+    dismiss: async (id) => { await API.delete(`notifications/${id}/dismiss/`); },
+    clearAll: async () => { await API.delete('notifications/clear/'); },
 };
 
 export default API;

@@ -162,6 +162,16 @@ const StudentDashboard = () => {
         }
     };
 
+    const handleDismiss = async (id) => {
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
+        try { await notificationService.dismiss(id); } catch { /* it reappears on the next refresh */ }
+    };
+
+    const handleClearAll = async () => {
+        setNotifications([]);
+        try { await notificationService.clearAll(); } catch { /* ignore */ }
+    };
+
     const subsByMilestone = submissions.reduce((acc, s) => {
         const mId = typeof s.milestone === 'object' ? s.milestone?.id : s.milestone;
         if (mId) (acc[mId] = acc[mId] || []).push(s);
@@ -753,6 +763,11 @@ const StudentDashboard = () => {
                 <aside className="bg-gradient-to-br from-blue-400/15 to-emerald-600/15 backdrop-blur-md rounded-xl border border-white/10 p-5 flex flex-col">
                     <div className="lg:sticky lg:top-6 flex flex-col h-full">
                         <h2 className="font-semibold text-white text-sm mb-5">Recent Activity</h2>
+                        {notifications.length > 0 && (
+                            <button onClick={handleClearAll} className="text-[11px] text-slate-400 hover:text-white underline mb-3">
+                                Clear all
+                            </button>
+                        )}
                         <div className="space-y-4">
                             {proposal?.supervisor_feedback && (
                                 <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg p-3.5">
@@ -791,7 +806,7 @@ const StudentDashboard = () => {
                             )}
 
                             {notifications.slice(0, 8).map((n) => (
-                                <NotificationItem key={n.id} n={n} />
+                                <NotificationItem key={n.id} n={n} onDismiss={handleDismiss}  />
                             ))}
 
                             {!proposal?.supervisor_feedback && !upcomingBooking && notifications.length === 0 && (
