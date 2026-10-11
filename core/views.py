@@ -30,6 +30,7 @@ from .notifications import (
     notify_proposal_submitted, notify_proposal_decision, notify_proposal_feedback,
 )
 from django.db.models import Count, Q
+from datetime import timedelta
 
 CHAPTER_COUNT = 5
 
@@ -333,10 +334,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             existing.save()
             return Response(self.get_serializer(existing).data, status=200)
 
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(project=project, chapter=chapter)
-        return Response(serializer.data, status=201)
+        submission = Submission.objects.create(
+            project=project, milestone=milestone, chapter=chapter, file_upload=upload,
+        )
+        return Response(self.get_serializer(submission).data, status=201)
 
 class MeetingSlotViewSet(viewsets.ModelViewSet):
     queryset = MeetingSlot.objects.all().order_by('start_time')
@@ -623,9 +624,25 @@ class SystemSettingsViewSet(viewsets.ModelViewSet):
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+    VISIBLE_DAYS = 7
 
     def get_queryset(self):
-        return Notification.objects.filter(
-            recipient=self.request.user
-        ).order_by('-created_at')
+        now = timezone.now()
+        return (
+            Notification.objects
+            .filter(recipient=self.request.user, created_at__gte=now - timedelta(days=self.VISIBLE_DAYS))
+            # a reminder for a meeting that has already started is just clutter
+            .exclude(kind__in=['MEETING_REMINDER_24H', 'MEETING_REMINDER_1H'], slot__start_time__lt=now)
+            .order_by('-created_at')
+        )
+
+    @action(detail=True, methods=['delete'], url_path='dismiss')
+    def dismiss(self, request, pk=None):
+        Notification.objects.filter(pk=pk, recipient=request.user).delete()
+        return Response(status=204)
+
+    @action(detail=False, methods=['delete'], url_path='clear')
+    def clear(self, request):
+        Notification.objects.filter(recipient=request.user).delete()
+        return Response(status=204)
     

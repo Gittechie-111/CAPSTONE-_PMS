@@ -54,7 +54,7 @@ class LoginView(APIView):
         if user.role in OTP_ROLES:
             if not user.phone_number and not user.email:
                 return Response(
-                    {'detail': 'No phone number is registered for this account. Contact the project coordinator.'},
+                    {'detail': 'No phone number or email is registered for this account. Contact the project coordinator.'},
                     status=403,
                 )
             code = f"{secrets.randbelow(10 ** 6):06d}"
@@ -75,6 +75,8 @@ class LoginView(APIView):
                 'phone_hint': ('••••' + user.phone_number[-3:]) if user.phone_number else None,
                 'email_hint': user.email,
             })
+
+        return Response(issue_tokens(user))  
 
 
 class VerifyOTPView(APIView):
@@ -106,6 +108,17 @@ class VerifyOTPView(APIView):
         otp.save(update_fields=['used'])
         return Response(issue_tokens(otp.user))
 
+    def send_activation_invite(user):
+        """Creates a fresh single-use link (older ones stop working) and sends it by email, and by SMS if enabled."""
+        raw_token = secrets.token_urlsafe(32)
+        StaffInvite.objects.filter(user=user, used=False).update(used=True)
+        StaffInvite.objects.create(user=user, token_hash=sha256(raw_token), expires_at=timezone.now() + INVITE_TTL)
+        link = f"{settings.FRONTEND_URL}/activate/{raw_token}"
+        text = f"You have been appointed as a supervisor on CPMS. Set your own password here (valid 48 hours): {link}"
+        if user.phone_number and settings.SMS_BACKEND != 'console':
+            send_sms(user.phone_number, text)
+        emailed = send_email(user.email, "Activate your CPMS supervisor account", text)
+        return link, emailed
 
 class InviteSupervisorView(APIView):
     """Coordinator appoints a supervisor; the supervisor sets their own password via an SMS link."""
@@ -127,8 +140,8 @@ class InviteSupervisorView(APIView):
         except (TypeError, ValueError):
             return Response({'error': 'Capacity must be a number.'}, status=400)
 
-        if not username or not phone:
-            return Response({'error': 'Username and phone number are required.'}, status=400)
+        if not username or not phone or not email:
+            return Response({'error': 'Username, phone number and email are required.'}, status=400)
         if not phone.startswith('+'):
             return Response({'error': 'Use international format, e.g. +254712345678.'}, status=400)
         if area not in dict(RESEARCH_AREA_CHOICES):

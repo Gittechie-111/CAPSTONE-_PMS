@@ -112,6 +112,18 @@ class Submission(models.Model):
     def __str__(self):
         return f"{self.project.student.username} - {self.milestone.title}"
 
+class ThesisSubmission(Submission):
+    class Meta:
+        proxy = True
+        verbose_name = 'Thesis submission'
+        verbose_name_plural = 'Thesis submissions'
+
+
+class PrototypeSubmission(Submission):
+    class Meta:
+        proxy = True
+        verbose_name = 'Prototype submission'
+        verbose_name_plural = 'Prototype submissions'
 
 
 # 📅 INTEGRATED MEETING SCHEDULER MODULE (Weeks 10-11)
@@ -253,39 +265,7 @@ class StaffInvite(models.Model):
     expires_at = models.DateTimeField()
     used = models.BooleanField(default=False)
 
-def notify_proposal_submitted(proposal):
-    """Tells the routed lecturer a new topic is waiting."""
-    supervisor = proposal.appointed_supervisor
-    if not supervisor:
-        return
-    notify(
-        supervisor.user, 'PROPOSAL_SUBMITTED',
-        f'New topic from {proposal.student.username}: "{proposal.title}". Open Proposal Topics to review it.',
-    )
 
-
-def notify_proposal_decision(proposal):
-    student = proposal.student
-    feedback = f" Feedback: {proposal.supervisor_feedback}" if proposal.supervisor_feedback else ""
-    if proposal.status == 'APPROVED':
-        kind = 'PROPOSAL_APPROVED'
-        subject = 'Your CPMS topic was approved'
-        message = (f'Your topic "{proposal.title}" was approved.{feedback} '
-                   f'Your supervisor will be confirmed once the coordinator runs allocation.')
-    else:
-        kind = 'PROPOSAL_REJECTED'
-        subject = 'Your CPMS topic needs changes'
-        message = (f'Your topic "{proposal.title}" was not approved.{feedback} '
-                   f'You can submit a revised topic from your dashboard.')
-    notify(student, kind, message)
-    send_email(student.email, subject, message)
-
-
-def notify_proposal_feedback(proposal):
-    notify(
-        proposal.student, 'PROPOSAL_FEEDBACK',
-        f'The reviewing lecturer left feedback on "{proposal.title}": {proposal.supervisor_feedback}',
-    )
 
 
 
