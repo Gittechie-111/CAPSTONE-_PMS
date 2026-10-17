@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
     const login = async (username, password) => {
         const data = await authService.login(username, password);
         if (data.otp_required) {
-            return { otpRequired: true, challengeId: data.challenge_id, phoneHint: data.phone_hint , emailHint: data.email_hint};
+            return { otpRequired: true, challengeId: data.challenge_id, phoneHint: data.phone_hint , emailHint: data.email_hint, channel: data.channel};
         }
         return { role: applyToken(data.access) };
 

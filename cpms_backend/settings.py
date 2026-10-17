@@ -154,6 +154,8 @@ SMS_BACKEND = config('SMS_BACKEND', default='console')
 AT_USERNAME = config('AT_USERNAME', default='sandbox')
 AT_API_KEY = config('AT_API_KEY', default='')
 AT_URL = 'https://api.africastalking.com/version1/messaging'
+AT_SENDER_ID = config('AT_SENDER_ID', default='')
+OTP_EMAIL_ALSO = config('OTP_EMAIL_ALSO', default=True, cast=bool)
 
 # Roles that must pass a one-time code after the password
 OTP_REQUIRED_ROLES = ['LECTURER', 'PANELIST']

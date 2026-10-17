@@ -51,32 +51,47 @@ class LoginView(APIView):
         if not user or not user.is_active:
             return Response({'detail': 'Invalid username or password.'}, status=400)
 
-        if user.role in OTP_ROLES:
-            if not user.phone_number and not user.email:
-                return Response(
-                    {'detail': 'No phone number or email is registered for this account. Contact the project coordinator.'},
-                    status=403,
-                )
-            code = f"{secrets.randbelow(10 ** 6):06d}"
-            LoginOTP.objects.filter(user=user, used=False).update(used=True)   # invalidate older codes
-            otp = LoginOTP.objects.create(
-                user=user,
-                challenge=secrets.token_urlsafe(16),
-                code_hash=make_password(code),
-                expires_at=timezone.now() + OTP_TTL,
-            )
-            message = f"Your CPMS login code is {code}. It expires in 5 minutes. Never share it with anyone."
-            if user.phone_number and settings.SMS_BACKEND != 'console':
-                send_sms(user.phone_number, f"CPMS login code: {code}. Valid for 5 minutes. Never share it.")
-            send_email(user.email, "Your CPMS login code", message)
-            return Response({
-                'otp_required': True,
-                'challenge_id': otp.challenge,
-                'phone_hint': ('••••' + user.phone_number[-3:]) if user.phone_number else None,
-                'email_hint': user.email,
-            })
+        if user.role not in OTP_ROLES:
+            return Response(issue_tokens(user))
 
-        return Response(issue_tokens(user))  
+        sms_ready = bool(user.phone_number) and settings.SMS_BACKEND != 'console'
+        if not sms_ready and not user.email:
+            return Response(
+                {'detail': 'No usable phone number or email is registered for this account. Contact the project coordinator.'},
+                status=403,
+            )
+
+        code = f"{secrets.randbelow(10 ** 6):06d}"
+        LoginOTP.objects.filter(user=user, used=False).update(used=True)   # invalidate older codes
+        otp = LoginOTP.objects.create(
+            user=user,
+            challenge=secrets.token_urlsafe(16),
+            code_hash=make_password(code),
+            expires_at=timezone.now() + OTP_TTL,
+        )
+
+        # SMS first; email only if SMS is unavailable or fails
+        channel = None
+        email_text = f"Your CPMS login code is {code}. It expires in 5 minutes. Never share it with anyone."
+        if sms_ready and send_sms(user.phone_number, f"CPMS login code: {code}. Valid for 5 minutes. Never share it."):
+            channel = 'sms'
+            if getattr(settings, 'OTP_EMAIL_ALSO', False) and user.email:
+                send_email(user.email, "Your CPMS login code", email_text)
+                channel = 'both'
+        elif user.email:
+            send_email(user.email, "Your CPMS login code", email_text)
+            channel = 'email'
+
+        if channel is None:
+            return Response({'detail': 'Could not send a login code. Please try again.'}, status=503)
+
+        return Response({
+            'otp_required': True,
+            'challenge_id': otp.challenge,
+            'channel': channel,
+            'phone_hint': ('••••' + user.phone_number[-3:]) if user.phone_number else None,
+            'email_hint': user.email,
+        }) 
 
 
 class VerifyOTPView(APIView):
@@ -108,20 +123,24 @@ class VerifyOTPView(APIView):
         otp.save(update_fields=['used'])
         return Response(issue_tokens(otp.user))
 
-    def send_activation_invite(user):
-        """Creates a fresh single-use link (older ones stop working) and sends it by email, and by SMS if enabled."""
-        raw_token = secrets.token_urlsafe(32)
-        StaffInvite.objects.filter(user=user, used=False).update(used=True)
-        StaffInvite.objects.create(user=user, token_hash=sha256(raw_token), expires_at=timezone.now() + INVITE_TTL)
-        link = f"{settings.FRONTEND_URL}/activate/{raw_token}"
-        text = f"You have been appointed as a supervisor on CPMS. Set your own password here (valid 48 hours): {link}"
-        if user.phone_number and settings.SMS_BACKEND != 'console':
-            send_sms(user.phone_number, text)
-        emailed = send_email(user.email, "Activate your CPMS supervisor account", text)
-        return link, emailed
+def send_activation_invite(user):
+    """Creates a fresh single-use link (older ones stop working) and emails it."""
+    raw_token = secrets.token_urlsafe(32)
+    StaffInvite.objects.filter(user=user, used=False).update(used=True)
+    StaffInvite.objects.create(
+        user=user, token_hash=sha256(raw_token), expires_at=timezone.now() + INVITE_TTL
+    )
+    link = f"{settings.FRONTEND_URL}/activate/{raw_token}"
+    emailed = send_email(
+        user.email,
+        "Activate your CPMS supervisor account",
+        f"You have been appointed as a supervisor on CPMS. "
+        f"Set your own password here (link valid 48 hours, works once): {link}",
+    )
+    return link, emailed
 
 class InviteSupervisorView(APIView):
-    """Coordinator appoints a supervisor; the supervisor sets their own password via an SMS link."""
+    """Coordinator appoints a supervisor; the supervisor sets their own password via an emailed link."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -149,31 +168,18 @@ class InviteSupervisorView(APIView):
         if User.objects.filter(username=username).exists():
             return Response({'error': 'That username already exists.'}, status=400)
 
-        raw_token = secrets.token_urlsafe(32)
         with transaction.atomic():
             user = User(username=username, email=email, phone_number=phone, role='LECTURER')
-            user.set_unusable_password()          # cannot log in until the invite is used
+            user.set_unusable_password()          # cannot sign in until the invite is used
             user.save()
             SupervisorProfile.objects.create(
                 user=user, expertise=expertise or area, research_area=area, max_capacity=capacity
             )
-            StaffInvite.objects.create(
-                user=user, token_hash=sha256(raw_token), expires_at=timezone.now() + INVITE_TTL
-            )
 
-        link = f"{settings.FRONTEND_URL}/activate/{raw_token}"
-        sent = send_sms(
-            phone,
-            f"You have been appointed as a supervisor on CPMS. Set up your account (valid 48h): {link}",
-        )
-        email_sent = send_email(
-            email,
-            "You've been appointed as a CPMS supervisor",
-            f"You have been appointed as a supervisor on CPMS. Set up your account (link valid 48 hours): {link}",
-        )
-        body = {'message': f'Supervisor {username} appointed.', 'sms_sent': sent, 'email_sent': email_sent}
+        link, emailed = send_activation_invite(user)
+        body = {'message': f'Supervisor {username} appointed.', 'email_sent': emailed}
         if settings.DEBUG:
-            body['activation_link'] = link        # convenient for local testing only
+            body['activation_link'] = link        # local testing only
         return Response(body, status=201)
 
 

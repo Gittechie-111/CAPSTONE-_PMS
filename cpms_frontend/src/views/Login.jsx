@@ -110,8 +110,12 @@ const Login = () => {
                         {otpChallenge ? (
                         <form onSubmit={handleVerify} className="space-y-5">
                             <p className="text-sm text-slate-300">
-                                We emailed a 6-digit code to {otpChallenge.emailHint || 'your registered email'}.
-                                It expires in 5 minutes.
+                                {otpChallenge.channel === 'both'
+                                    ? `We sent a 6-digit code by text (phone ending ${otpChallenge.phoneHint?.slice(-3)}) and by email (${otpChallenge.emailHint}). Use whichever arrives first.`
+                                    : otpChallenge.channel === 'sms'
+                                    ? `We texted a 6-digit code to the phone ending ${otpChallenge.phoneHint?.slice(-3)}.`
+                                    : `We emailed a 6-digit code to ${otpChallenge.emailHint}.`}
+                                {' '}It expires in 5 minutes.
                             </p>
                             <input
                                 id="login-otp"
