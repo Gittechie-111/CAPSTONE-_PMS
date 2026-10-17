@@ -24,6 +24,10 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='STUDENT')
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     registration_number = models.CharField(max_length=20, blank=True, null=True, unique=True, help_text="e.g. SCT211-0001/2021")
+    security_question = models.CharField(max_length=120, blank=True, default='')
+    security_answer_hash = models.CharField(max_length=128, blank=True, default='')
+    security_failed_attempts = models.PositiveSmallIntegerField(default=0)
+    security_locked_until = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.username} ({self.role})"
@@ -90,6 +94,19 @@ class Milestone(models.Model):
     def __str__(self):
         return self.title
 
+#The coordinator sets one date per chapter. Any chapter without its own date falls back to the thesis’s final deadline.
+class ChapterDeadline(models.Model):
+    """Optional per-chapter deadline for a milestone that has_chapters. Missing = use the milestone's due_date."""
+    milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, related_name='chapter_deadlines')
+    chapter = models.PositiveSmallIntegerField()
+    due_date = models.DateTimeField()
+
+    class Meta:
+        unique_together = ('milestone', 'chapter')
+        ordering = ['milestone', 'chapter']
+
+    def __str__(self):
+        return f"{self.milestone.title} - Chapter {self.chapter}: {self.due_date:%Y-%m-%d %H:%M}"
 
 class Submission(models.Model):
     """Students upload files against milestones here."""

@@ -14,7 +14,7 @@ from .permissions import IsStudentRole, IsStaffRoleOrReadOnly, IsAdminRoleOrRead
 from .models import (
     User, AllocatedProject, ProjectProposal, Milestone,
     Submission, MeetingSlot, MeetingBooking, GradingCriteria, PanelGrade,
-    SupervisorProfile, Notification, SystemSettings)
+    SupervisorProfile, Notification, SystemSettings, ChapterDeadline)
 from .serializers import (
     UserSerializer, AllocatedProjectSerializer, ProjectProposalSerializer,
     MilestoneSerializer, SubmissionSerializer, MeetingSlotSerializer,
@@ -64,6 +64,14 @@ class SupervisorProfileViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SupervisorProfile.objects.all()
     serializer_class = SupervisorProfileSerializer
     permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        try:
+            profile = request.user.supervisor_profile
+        except SupervisorProfile.DoesNotExist:
+            return Response({'error': 'No supervisor profile.'}, status=404)
+        return Response(SupervisorProfileSerializer(profile).data)
 
 
 class ProjectProposalViewSet(viewsets.ModelViewSet):
@@ -265,9 +273,51 @@ class ProjectProposalViewSet(viewsets.ModelViewSet):
 
 
 class MilestoneViewSet(viewsets.ModelViewSet):
-    queryset = Milestone.objects.all().order_by('due_date')
+    queryset = Milestone.objects.all().order_by('due_date').prefetch_related('chapter_deadlines')
     serializer_class = MilestoneSerializer
-    permission_classes = [IsAuthenticated, IsStaffRoleOrReadOnly]
+    permission_classes = [IsAuthenticated, IsAdminRoleOrReadOnly]
+
+    @action(detail=True, methods=['put'], url_path='chapter-deadlines')
+    def chapter_deadlines(self, request, pk=None):
+        """Coordinator sets, changes or clears chapter deadlines. Send only the chapters you want to change."""
+        milestone = self.get_object()
+        if not milestone.has_chapters:
+            return Response({"error": "This milestone is not split into chapters."}, status=400)
+
+        data = request.data.get('deadlines')
+        if not isinstance(data, dict):
+            return Response({"error": "Send deadlines as {chapter: datetime}."}, status=400)
+
+        parsed = {}
+        for key, raw in data.items():
+            try:
+                ch = int(key)
+            except (TypeError, ValueError):
+                return Response({"error": f"Invalid chapter '{key}'."}, status=400)
+            if not 1 <= ch <= CHAPTER_COUNT:
+                return Response({"error": f"Chapter must be between 1 and {CHAPTER_COUNT}."}, status=400)
+
+            if raw in (None, ''):
+                parsed[ch] = None            # empty clears it, so the final deadline applies
+                continue
+            when = parse_datetime(raw) if isinstance(raw, str) else None
+            if not when:
+                return Response({"error": f"Chapter {ch}: not a valid date and time."}, status=400)
+            if timezone.is_naive(when):
+                when = timezone.make_aware(when)
+            parsed[ch] = when
+
+        with transaction.atomic():
+            for ch, when in parsed.items():
+                if when is None:
+                    ChapterDeadline.objects.filter(milestone=milestone, chapter=ch).delete()
+                else:
+                    ChapterDeadline.objects.update_or_create(
+                        milestone=milestone, chapter=ch, defaults={'due_date': when}
+                    )
+
+        fresh = Milestone.objects.prefetch_related('chapter_deadlines').get(pk=milestone.pk)
+        return Response(self.get_serializer(fresh).data)
 
 class SubmissionViewSet(viewsets.ModelViewSet):
     queryset = Submission.objects.all().order_by('-submitted_at')
@@ -323,20 +373,29 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if not upload:
             return Response({'error': 'Attach a file.'}, status=400)
 
-        existing = Submission.objects.filter(project=project, milestone=milestone, chapter=chapter).first()
-        if existing:
-            if existing.status != 'REVISIONS':
-                return Response({'error': 'This has already been submitted.'}, status=400)
-            existing.file_upload = upload
-            existing.status = 'PENDING'
-            existing.supervisor_comments = ''
-            existing.submitted_at = timezone.now()
-            existing.save()
-            return Response(self.get_serializer(existing).data, status=200)
+        #A submission that is still waiting for review blocks a second upload
+        label = f"Chapter {chapter}" if chapter else milestone.title
+        with transaction.atomic():
+            # lock this student's project row so two uploads can't pass the check at the same time
+            AllocatedProject.objects.select_for_update().get(pk=project.pk)
 
-        submission = Submission.objects.create(
-            project=project, milestone=milestone, chapter=chapter, file_upload=upload,
-        )
+            existing = Submission.objects.filter(project=project, milestone=milestone, chapter=chapter).first()
+            if existing:
+                if existing.status != 'REVISIONS':
+                    return Response(
+                        {'error': f'{label} has already been submitted. You can upload it again only if your supervisor requests revisions.'},
+                        status=400,
+                    )
+                existing.file_upload = upload
+                existing.status = 'PENDING'
+                existing.supervisor_comments = ''
+                existing.submitted_at = timezone.now()
+                existing.save()
+                return Response(self.get_serializer(existing).data, status=200)
+
+            submission = Submission.objects.create(
+                project=project, milestone=milestone, chapter=chapter, file_upload=upload,
+            )
         return Response(self.get_serializer(submission).data, status=201)
 
 class MeetingSlotViewSet(viewsets.ModelViewSet):
@@ -435,37 +494,49 @@ class MeetingBookingViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_create(self, serializer):
-        """Book a meeting slot for the current student."""
         slot = serializer.validated_data['slot']
         student = self.request.user
 
-        # Check if student is already booked on this slot
-        if MeetingBooking.objects.filter(slot=slot, student=student, status='BOOKED').exists():
-            raise serializers.ValidationError("You are already booked for this slot.")
+        if student.role != 'STUDENT':
+            raise PermissionDenied("Only students can book meeting slots.")
+        try:
+            if slot.supervisor_id != student.allocated_project.supervisor_id:
+                raise serializers.ValidationError("That slot belongs to a different supervisor.")
+        except AllocatedProject.DoesNotExist:
+            raise serializers.ValidationError("You are not allocated to a supervisor yet.")
+        if slot.start_time <= timezone.now():
+            raise serializers.ValidationError("That slot has already started.")
+        if slot.status not in ('OPEN',):
+            raise serializers.ValidationError("That slot is not open for booking.")
 
-        # Check if slot is still open (not full)
+        existing = MeetingBooking.objects.select_for_update().filter(slot=slot, student=student).first()
+        if existing and existing.status == 'BOOKED':
+            raise serializers.ValidationError("You have already booked a slot.")
+
         if slot.get_booked_count() >= slot.capacity:
             raise serializers.ValidationError("This slot is now full.")
 
-        # Check if student is already booked on another slot at the same time
-        conflicting_booking = MeetingBooking.objects.filter(
-            student=student,
-            slot__start_time__lte=slot.end_time,
-            slot__end_time__gte=slot.start_time,
-            status='BOOKED'
+        overlapping = MeetingBooking.objects.filter(
+            student=student, status='BOOKED',
+            slot__start_time__lt=slot.end_time, slot__end_time__gt=slot.start_time,
         ).exists()
+        if overlapping:
+            raise serializers.ValidationError("You have already booked a slot at this time.")
 
-        if conflicting_booking:
-            raise serializers.ValidationError("You already have a booking in this time slot.")
+        if existing:
+            # A cancelled booking for this slot still occupies the (slot, student) pair, so reuse it
+            existing.status = 'BOOKED'
+            existing.cancellation_reason = None
+            existing.cancelled_at = None
+            existing.save()
+            serializer.instance = existing
+            booking = existing
+        else:
+            booking = serializer.save(student=student)
 
-        # Create the booking
-        booking = serializer.save(student=student)
-
-        # Update slot status if now full
         if booking.slot.get_booked_count() >= booking.slot.capacity:
             booking.slot.status = 'FULL'
             booking.slot.save()
-
     
     @action(detail=True, methods=['patch'], url_path='cancel')
     def cancel_booking(self, request, pk=None):
@@ -607,20 +678,20 @@ class AllocatedProjectViewSet(viewsets.ModelViewSet):
 class SystemSettingsViewSet(viewsets.ModelViewSet):
     queryset = SystemSettings.objects.all()
     serializer_class = SystemSettingsSerializer
-    permission_classes = [IsAuthenticated]
+    # Anyone signed in can read; only the coordinator can write (this also closes /api/settings/<id>/ to students)
+    permission_classes = [IsAuthenticated, IsAdminRoleOrReadOnly]
 
     @action(detail=False, methods=['get', 'patch'], url_path='current')
     def current(self, request):
         settings_obj, _ = SystemSettings.objects.get_or_create(id=1)
         if request.method == 'PATCH':
-            if request.user.role not in ['LECTURER', 'ADMIN']:
-                return Response({"error": "Not authorized."}, status=403)
             serializer = SystemSettingsSerializer(settings_obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
         return Response(SystemSettingsSerializer(settings_obj).data)
 
+    
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]

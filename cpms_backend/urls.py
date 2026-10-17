@@ -7,7 +7,7 @@ from core.views import (
     MilestoneViewSet, SubmissionViewSet, MeetingSlotViewSet, MeetingBookingViewSet,
     GradingCriteriaViewSet, PanelGradeViewSet,  SupervisorProfileViewSet, RegisterView, SystemSettingsViewSet,
     NotificationViewSet)
-from core.auth_views import (LoginView, VerifyOTPView, InviteSupervisorView, ActivateAccountView,)
+from core.auth_views import (LoginView, VerifyOTPView, InviteSupervisorView, ActivateAccountView, ForgotQuestionView, ForgotResetView, SetSecurityQuestionView)
 from rest_framework_simplejwt.views import  TokenRefreshView
 from django.conf import settings
 from django.conf.urls.static import static
@@ -42,6 +42,9 @@ urlpatterns = [
     path('api/auth/activate/', ActivateAccountView.as_view(), name='auth_activate'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/register/', RegisterView.as_view(), name='register'),
+    path('api/auth/forgot/question/', ForgotQuestionView.as_view(), name='auth_forgot_question'),
+    path('api/auth/forgot/reset/', ForgotResetView.as_view(), name='auth_forgot_reset'),
+    path('api/auth/security-question/', SetSecurityQuestionView.as_view(), name='auth_security_question'),
 ]
 
 # ✅ FIX: serve uploaded media files during development

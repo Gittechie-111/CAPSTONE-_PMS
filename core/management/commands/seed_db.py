@@ -103,7 +103,7 @@ class Command(BaseCommand):
         # 📈 3. DEADLINES & MILESTONE SUBMISSIONS
         # =====================================================================
         self.stdout.write('Building milestones and files...')
-        m1 = Milestone.objects.create(title='Project Proposal Thesis', description='Upload initial layout', due_date=timezone.now() - timedelta(days=10), weight=20)
+        m1 = Milestone.objects.create(title='Project Project Thesis', description='Upload initial layout', due_date=timezone.now() - timedelta(days=10), weight=20)
         m2 = Milestone.objects.create(title='System Prototype', description='Upload running code framework', due_date=timezone.now() + timedelta(days=20), weight=40)
 
         for proj in allocated_projects:

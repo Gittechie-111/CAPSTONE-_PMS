@@ -5,7 +5,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     User, SupervisorProfile, ProjectProposal, AllocatedProject, 
     Milestone, Submission, MeetingSlot, MeetingBooking, 
-    GradingCriteria, PanelGrade, SystemSettings, ThesisSubmission, PrototypeSubmission
+    GradingCriteria, PanelGrade, SystemSettings, ThesisSubmission, PrototypeSubmission, ChapterDeadline
 )
 
 @admin.register(SystemSettings)
@@ -131,10 +131,16 @@ class AllocatedProjectAdmin(admin.ModelAdmin):
     list_display = ('title', 'student', 'supervisor', 'assigned_at')
     search_fields = ('title', 'student__username', 'supervisor__user__username')
 
+class ChapterDeadlineInline(admin.TabularInline):
+    model = ChapterDeadline
+    extra = 0
+    max_num = 5
+
 @admin.register(Milestone)
 class MilestoneAdmin(admin.ModelAdmin):
     list_display = ('title', 'due_date', 'weight', 'has_chapters')
     list_filter = ('due_date',)
+    inlines = [ChapterDeadlineInline]
 
 @admin.register(Submission)
 class BaseSubmissionAdmin(admin.ModelAdmin):

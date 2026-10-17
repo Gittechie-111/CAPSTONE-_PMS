@@ -3,6 +3,9 @@ from .models import User, AllocatedProject, SupervisorProfile, ProjectProposal
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import SystemSettings, Notification
 from .models import Milestone, Submission, MeetingSlot, MeetingBooking
+from django.contrib.auth.hashers import make_password
+from .security_questions import SECURITY_QUESTIONS, normalize_answer
+
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -63,10 +66,15 @@ class ProjectProposalSerializer(serializers.ModelSerializer):
 # 📈 MILESTONE & SUBMISSION SERIALIZERS
 
 class MilestoneSerializer(serializers.ModelSerializer):
+    chapter_deadlines = serializers.SerializerMethodField()
+
     class Meta:
         model = Milestone
-        fields = ['id', 'title', 'description', 'due_date', 'weight', 'has_chapters']
+        fields = ['id', 'title', 'description', 'due_date', 'weight', 'has_chapters', 'chapter_deadlines']
 
+    def get_chapter_deadlines(self, obj):
+        field = serializers.DateTimeField()
+        return {str(d.chapter): field.to_representation(d.due_date) for d in obj.chapter_deadlines.all()}
 
 
 class SubmissionSerializer(serializers.ModelSerializer):
@@ -137,20 +145,28 @@ from .models import GradingCriteria, PanelGrade
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     registration_number = serializers.CharField(required=True)
+    security_question = serializers.ChoiceField(choices=SECURITY_QUESTIONS, write_only=True)
+    security_answer = serializers.CharField(write_only=True, min_length=3)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'password', 'phone_number', 'registration_number']
+        fields = ['id', 'username', 'email', 'password', 'phone_number', 'registration_number',
+                  'security_question', 'security_answer']
 
     def create(self, validated_data):
+        question = validated_data.pop('security_question')
+        answer = validated_data.pop('security_answer')
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
             phone_number=validated_data.get('phone_number', ''),
             registration_number=validated_data.get('registration_number'),
             password=validated_data['password'],
-            role='STUDENT'
+            role='STUDENT',
         )
+        user.security_question = question
+        user.security_answer_hash = make_password(normalize_answer(answer))
+        user.save(update_fields=['security_question', 'security_answer_hash'])
         return user
 
 

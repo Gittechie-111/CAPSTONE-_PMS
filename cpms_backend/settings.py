@@ -129,6 +129,17 @@ STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '10/min',
+        'reset': '5/min',
+    }
+}
+
 #  Email
 # Real emails are sent once EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are set in .env.
 # Until then, emails are printed in the Django terminal.
