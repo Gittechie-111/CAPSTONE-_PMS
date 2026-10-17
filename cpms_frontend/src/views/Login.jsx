@@ -136,6 +136,9 @@ const Login = () => {
                             >
                                 {submitting ? 'Verifying…' : 'Verify & Sign In'}
                             </button>
+                            <p className="text-center">
+                                <Link to="/forgot-password" className="text-xs text-slate-400 hover:text-slate-200">Forgot password?</Link>
+                            </p>
                             <button
                                 type="button"
                                 onClick={() => { setOtpChallenge(null); setOtpCode(''); setError(''); }}

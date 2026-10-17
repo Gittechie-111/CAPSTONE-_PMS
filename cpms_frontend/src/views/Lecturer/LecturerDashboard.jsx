@@ -2,19 +2,20 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
     projectService, meetingSlotService, meetingBookingService, proposalService,
-    settingsService, milestoneAdminService, milestoneService, submissionService, notificationService,
+    settingsService, milestoneAdminService, milestoneService, submissionService, notificationService, supervisorService
 } from '../../services/api';
 import FileViewer from '../../components/FileViewer';
 import NotificationItem from '../../components/NotificationItem';
+import SecurityQuestionForm from '../../components/SecurityQuestionForm';
 
 const CHAPTERS = [1, 2, 3, 4, 5];
 
-const toDatetimeLocal = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+// const toDatetimeLocal = (iso) => {
+//     if (!iso) return '';
+//     const d = new Date(iso);
+//     const pad = (n) => String(n).padStart(2, '0');
+//     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// };
 
 const NAV_ITEMS = [
        { id: 'assigned-proposals', label: 'Topics to Review', icon: '📝' },
@@ -24,6 +25,11 @@ const NAV_ITEMS = [
        { id: 'slot-bookings', label: 'Upcoming Meetings', icon: '📅' },
        { id: 'manage-timelines', label: 'Timelines', icon: '⏰' },
    ];
+
+const AREA_LABELS = {
+    AI_ML: 'AI & Machine Learning', CYBER: 'Cybersecurity & Blockchain', IOT: 'IoT & Embedded Systems',
+    WEB: 'Web & Mobile Development', DATA: 'Data Science & Analytics', OTHER: 'Other',
+};
 
 const LecturerDashboard = () => {
     const { user, logout } = useAuth();
@@ -61,6 +67,7 @@ const LecturerDashboard = () => {
     const [subSearch, setSubSearch] = useState('');
     const [subFilter, setSubFilter] = useState('ALL');
     const [subLimit, setSubLimit] = useState(10);
+    const [supervisorProfile, setSupervisorProfile] = useState(null);
 
     const API_BASE = 'http://127.0.0.1:8000';
     const toAbsoluteUrl = (url) => {
@@ -87,6 +94,7 @@ const LecturerDashboard = () => {
                 meetingBookingService.getBookings(),
                 submissionService.getSubmissions(),
                 notificationService.getNotifications(),
+                supervisorService.getMe().catch(() => null),
             ]);
             setProjects(projectData);
             setSlots(slotData);
@@ -96,6 +104,7 @@ const LecturerDashboard = () => {
             setBookings(bookingData);
             setSubmissions(submissionData);
             setNotifications(notifData);
+            setSupervisorProfile(supervisorData);
         } catch (err) {
             setError('Could not load your dashboard data.');
         } finally {
@@ -237,28 +246,28 @@ const LecturerDashboard = () => {
         }
     };
 
-    const handleSaveDeadline = async () => {
-        setSavingTimeline(true);
-        setError('');
-        try {
-            await settingsService.updateProposalDeadline(proposalDeadline);
-            await loadData();
-        } catch (err) {
-            setError('Could not update the proposal deadline.');
-        } finally {
-            setSavingTimeline(false);
-        }
-    };
+    // const handleSaveDeadline = async () => {
+    //     setSavingTimeline(true);
+    //     setError('');
+    //     try {
+    //         await settingsService.updateProposalDeadline(proposalDeadline);
+    //         await loadData();
+    //     } catch (err) {
+    //         setError('Could not update the proposal deadline.');
+    //     } finally {
+    //         setSavingTimeline(false);
+    //     }
+    // };
 
-    const handleUpdateMilestoneDate = async (milestoneId, newDate) => {
-        setError('');
-        try {
-            await milestoneAdminService.updateMilestone(milestoneId, { due_date: newDate });
-            await loadData();
-        } catch (err) {
-            setError('Could not update that milestone deadline.');
-        }
-    };
+    // const handleUpdateMilestoneDate = async (milestoneId, newDate) => {
+    //     setError('');
+    //     try {
+    //         await milestoneAdminService.updateMilestone(milestoneId, { due_date: newDate });
+    //         await loadData();
+    //     } catch (err) {
+    //         setError('Could not update that milestone deadline.');
+    //     }
+    // };
 
     const handleReviewSubmission = async (submissionId, status) => {
         setError('');
@@ -342,8 +351,14 @@ const LecturerDashboard = () => {
                             Welcome back, {user?.username}
                         </h1>
                         <p className="text-slate-300 text-sm">
-                            Supervising {projects.length} student{projects.length !== 1 ? 's' : ''}
-                        </p>
+                           Supervising {projects.length} student{projects.length !== 1 ? 's' : ''}
+                           {supervisorProfile && <> · Capacity {projects.length}/{supervisorProfile.max_capacity}</>}
+                       </p>
+                       {supervisorProfile && (
+                           <p className="text-slate-400 text-xs mt-1">
+                               Research area: {AREA_LABELS[supervisorProfile.research_area] || supervisorProfile.research_area}
+                           </p>
+                       )}
                     </header>
 
                     {error && (
@@ -774,49 +789,34 @@ const LecturerDashboard = () => {
                         </section>
 
                         {/* Manage Timelines */}
-                        <section id="manage-timelines" className="border-t border-white/10 pt-8 scroll-mt-6">
-                            <h2 className="text-sm font-semibold text-white tracking-wide mb-4">Manage Timelines</h2>
-
-                            <div className="mb-6">
-                                <label htmlFor="proposal-deadline" className="block text-sm font-medium text-slate-100 mb-1">
-                                    Proposal Submission Deadline
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        id="proposal-deadline"
-                                        name="proposal_deadline"
-                                        type="datetime-local"
-                                        value={toDatetimeLocal(proposalDeadline)}
-                                        onChange={(e) => setProposalDeadline(e.target.value)}
-                                        className="flex-1 px-3 py-2 border border-white/15 bg-slate-900/30 rounded text-white"
-                                    />
-                                    <button
-                                        onClick={handleSaveDeadline}
-                                        disabled={savingTimeline}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium disabled:opacity-50"
-                                    >
-                                        {savingTimeline ? 'Saving...' : 'Save'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div>
-                                <p className="text-sm font-medium text-slate-100 mb-2">Milestone Deadlines</p>
-                                <div className="space-y-3">
+                            <section id="manage-timelines" className="border-t border-white/10 pt-8 scroll-mt-6">
+                               <h2 className="text-sm font-semibold text-white tracking-wide mb-1">Timelines</h2>
+                               <p className="text-xs text-slate-400 mb-4">Set by the project coordinator for all supervisors.</p>
+                               <div className="space-y-2 text-sm text-slate-200">
+                                   <div className="flex justify-between gap-3">
+                                       <span>Proposal topic deadline</span>
+                                       <span>{proposalDeadline ? formatDateTime(proposalDeadline) : 'Not set'}</span>
+                                   </div>
                                     {milestones.map((m) => (
-                                        <div key={m.id} className="flex items-center justify-between gap-3">
-                                            <span className="text-sm text-slate-200">{m.title} ({m.weight}%)</span>
-                                            <input
-                                                type="datetime-local"
-                                                defaultValue={toDatetimeLocal(m.due_date)}
-                                                onBlur={(e) => handleUpdateMilestoneDate(m.id, e.target.value)}
-                                                className="px-2 py-1 border border-white/15 bg-slate-900/30 rounded text-white text-sm"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </section>
+                                       <div key={m.id}>
+                                           <div className="flex justify-between gap-3">
+                                               <span>{m.title} ({m.weight}%){m.has_chapters ? ' — final deadline' : ''}</span>
+                                               <span>{formatDateTime(m.due_date)}</span>
+                                           </div>
+                                           {m.has_chapters && (
+                                               <div className="ml-4 mt-1 space-y-1 text-xs text-slate-300">
+                                                   {CHAPTERS.map((ch) => (
+                                                       <div key={ch} className="flex justify-between gap-3">
+                                                           <span>Chapter {ch}</span>
+                                                           <span>{formatDateTime(m.chapter_deadlines?.[ch] || m.due_date)}</span>
+                                                       </div>
+                                                   ))}
+                                               </div>
+                                           )}
+                                       </div>
+                                   ))}
+                               </div>
+                           </section>
 
                         {/* Open a New Slot */}
                         <section className="border-t border-white/10 pt-8">
@@ -1060,6 +1060,7 @@ const LecturerDashboard = () => {
                                 <span className="text-white">{openSlotCount}</span>
                             </div>
                         </div>
+                        <SecurityQuestionForm />
                         <button
                             onClick={() => setShowProfile(false)}
                             className="mt-5 w-full text-xs border border-white/10 text-slate-300 hover:text-white px-3 py-2 rounded"

@@ -8,7 +8,8 @@ import StudentDashboard from './views/Student/StudentDashboard';
 import LecturerDashboard from './views/Lecturer/LecturerDashboard';
 import AdminDashboard from './views/Admin/AdminDashboard';
 import Register from './views/Register';
-import ActivateAccount from './views/ActivateAccount'
+import ActivateAccount from './views/ActivateAccount';
+import ForgotPassword from './views/ForgotPassword';
 
 function AppRoutes() {
     const location = useLocation();
@@ -17,6 +18,7 @@ function AppRoutes() {
         <div key={location.pathname} className="route-page">
             <Routes location={location}>
                 <Route path="/" element={<Navigate to="/login" replace />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/activate/:token" element={<ActivateAccount />} />
 

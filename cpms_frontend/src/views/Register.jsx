@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/api';
+import { SECURITY_QUESTIONS } from '../constants/securityQuestions';
+import { apiError } from '../services/apiError';
 // Global GradientLayout applied in App.jsx
 
 const Register = () => {
@@ -14,6 +16,8 @@ const Register = () => {
     const [registrationNumber, setRegistrationNumber] = useState('');
     const navigate = useNavigate();
     const formKey = useRef(`register-form-${Date.now()}-${Math.random()}`);
+    const [securityQuestion, setSecurityQuestion] = useState('');
+    const [securityAnswer, setSecurityAnswer] = useState('');
 
     useEffect(() => {
         const clearFields = () => {
@@ -76,7 +80,7 @@ const Register = () => {
         }
         setSubmitting(true);
         try {
-            await authService.register(username, email, password, phoneNumber, registrationNumber);
+            await authService.register(username, email, password, phoneNumber, registrationNumber, securityQuestion, securityAnswer);
             setSuccess(true);
             setTimeout(() => navigate('/login'), 1500);
         } catch (err) {
@@ -89,7 +93,10 @@ const Register = () => {
         } finally {
             setSubmitting(false);
         }
+        
     };
+
+    
 
     return (
         <div className="min-h-screen flex items-center justify-center px-4">
@@ -209,6 +216,19 @@ const Register = () => {
                                     required
                                     className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/70 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:border-emerald-400/60 transition-colors"
                                 />
+                            </div>
+                            <div>
+                                <label htmlFor="reg-secq" className="block text-sm font-medium text-slate-300 mb-1.5">Security question</label>
+                                <select id="reg-secq" value={securityQuestion} onChange={(e) => setSecurityQuestion(e.target.value)} required
+                                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/70 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60">
+                                    <option value="">Choose a question...</option>
+                                    {SECURITY_QUESTIONS.map((q) => <option key={q} value={q}>{q}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="reg-seca" className="block text-sm font-medium text-slate-300 mb-1.5">Answer (used to reset your password)</label>
+                                <input id="reg-seca" type="text" value={securityAnswer} onChange={(e) => setSecurityAnswer(e.target.value)} required minLength={3} autoComplete="off"
+                                    className="w-full px-3.5 py-2.5 rounded-lg bg-slate-800/70 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60" />
                             </div>
                             <button
                                 type="submit"

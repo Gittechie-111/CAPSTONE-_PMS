@@ -6,6 +6,8 @@ import {
 } from '../../services/api';
 import FileViewer from '../../components/FileViewer';
 import NotificationItem from '../../components/NotificationItem';
+import { apiError } from '../../services/apiError';
+import SecurityQuestionForm from '../../components/SecurityQuestionForm';
 
 const CHAPTERS = [1, 2, 3, 4, 5];
 const STATUS_LABEL = { APPROVED: 'Approved', REVISIONS: 'Revisions requested', PENDING: 'Awaiting review' };
@@ -29,6 +31,8 @@ const RESEARCH_AREAS = [
     { value: 'DATA', label: 'Data Science & Analytics' },
     { value: 'OTHER', label: 'Other' }
 ];
+
+const areaLabel = (v) => RESEARCH_AREAS.find((r) => r.value === v)?.label || v;
 
 const NAV_ITEMS = [
     { id: 'milestone-progress', label: 'Dashboard', icon: '🏠' },
@@ -179,6 +183,7 @@ const StudentDashboard = () => {
     }, {});
     const chapterSub = (mId, ch) => (subsByMilestone[mId] || []).find((s) => s.chapter === ch);
     const singleSub = (mId) => (subsByMilestone[mId] || [])[0];
+    const chapterDue = (m, ch) => new Date(m.chapter_deadlines?.[ch] || m.due_date);
 
     const milestoneFraction = (m) =>
         m.has_chapters
@@ -195,11 +200,18 @@ const StudentDashboard = () => {
         if (m.has_chapters) {
             return CHAPTERS
                 .filter((ch) => { const s = chapterSub(m.id, ch); return !s || s.status === 'REVISIONS'; })
-                .map((ch) => ({ key: `${m.id}:${ch}`, milestoneId: m.id, chapter: ch, sub: chapterSub(m.id, ch), label: `${m.title} — Chapter ${ch}` }));
+                .map((ch) => ({
+                    key: `${m.id}:${ch}`,
+                    milestoneId: m.id,
+                    chapter: ch,
+                    sub: chapterSub(m.id, ch),
+                    label: `${m.title} — Chapter ${ch}`,
+                    due: chapterDue(m, ch),
+                }));
         }
         const s = singleSub(m.id);
         return !s || s.status === 'REVISIONS'
-            ? [{ key: `${m.id}`, milestoneId: m.id, chapter: null, sub: s, label: m.title }]
+            ? [{ key: `${m.id}`, milestoneId: m.id, chapter: null, sub: s, label: m.title, due: m.due_date }]
             : [];
     });
     const selectedTarget = uploadTargets.find((t) => t.key === selectedMilestone);
@@ -231,16 +243,10 @@ const StudentDashboard = () => {
         try {
             await meetingBookingService.bookSlot(slotId);
             await loadData();
-        } catch (err) {
-            const errData = err.response?.data;
-            if (typeof errData === 'string') {
-                setError(errData);
-            } else if (errData?.detail) {
-                setError(errData.detail);
-            } else {
-                setError('Booking failed. Please try again.');
-            }
-        } finally {
+        }   catch (err) {
+               setError(apiError(err, 'Booking failed. Please try again.'));
+               window.scrollTo({ top: 0, behavior: 'smooth' });
+           } finally {
             setLoadingSlot(null);
         }
     };
@@ -346,6 +352,13 @@ const StudentDashboard = () => {
                                 'No active proposal yet'
                             )}
                         </p>
+                        {proposal && (
+                           <p className="text-slate-400 text-xs mt-1">
+                               {proposal.appointed_supervisor_details
+                                   ? <>Supervisor: {proposal.appointed_supervisor_details.user_details?.username} · Research area: {areaLabel(proposal.appointed_supervisor_details.research_area)}</>
+                                   : <>Topic research area: {areaLabel(proposal.research_area)}</>}
+                           </p>
+                       )}
                     </header>
 
                     {error && (
@@ -396,7 +409,7 @@ const StudentDashboard = () => {
                                                 <div>
                                                     <p className="text-sm text-slate-100">{m.title} ({m.weight}%)</p>
                                                     <p className={`text-xs mt-0.5 ${overdue && done < CHAPTERS.length ? 'text-red-300' : 'text-slate-400'}`}>
-                                                        Due {due.toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                                                        Final deadline {due.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                                                     </p>
                                                 </div>
                                                 <span className="text-xs text-slate-300 shrink-0">{done}/{CHAPTERS.length} chapters submitted</span>
@@ -405,12 +418,23 @@ const StudentDashboard = () => {
                                                 {CHAPTERS.map((ch) => {
                                                     const s = chapterSub(m.id, ch);
                                                     const status = s ? s.status : 'PENDING';
+                                                    const chDue = chapterDue(m, ch);
+                                                    const chOverdue = !s && chDue < new Date();
+                                                    const rowStyle = chOverdue
+                                                        ? 'border-red-400/40 bg-red-500/10 text-red-200'
+                                                        : STATUS_STYLE[status];
                                                     return (
                                                         <div key={ch}>
-                                                            <div className={`flex items-center justify-between gap-3 border rounded-md px-3 py-2 text-xs ${STATUS_STYLE[status]}`}>
-                                                                <span>
-                                                                    {MILESTONE_ICONS[status]} Chapter {ch} — {s ? STATUS_LABEL[status] : 'Not submitted'}
-                                                                </span>
+                                                            <div className={`flex items-center justify-between gap-3 border rounded-md px-3 py-2 text-xs ${rowStyle}`}>
+                                                                <div className="min-w-0">
+                                                                    <span>
+                                                                        {MILESTONE_ICONS[status]} Chapter {ch} —{' '}
+                                                                        {s ? STATUS_LABEL[status] : chOverdue ? 'Overdue' : 'Not submitted'}
+                                                                    </span>
+                                                                    <p className="text-[11px] opacity-70 mt-0.5">
+                                                                        Due {chDue.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                                                                    </p>
+                                                                </div>
                                                                 {s && (
                                                                     <button
                                                                         onClick={() => setViewerFile({ url: s.file_upload, title: `${m.title} — Chapter ${ch}` })}
@@ -441,13 +465,18 @@ const StudentDashboard = () => {
                                 return (
                                     <div key={m.id}>
                                         <div className={`flex items-center justify-between gap-3 border rounded-lg px-5 py-4 ${styles[status]}`}>
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <span>{MILESTONE_ICONS[status]}</span>
-                                                <span className="text-sm break-words">
-                                                    {m.title} ({m.weight}%) —{' '}
-                                                    {submitted ? STATUS_LABEL[status] : isOverdue ? 'Overdue' : 'Pending'}
-                                                </span>
-                                            </div>
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                   <span>{MILESTONE_ICONS[status]}</span>
+                                                   <div className="min-w-0">
+                                                       <span className="text-sm break-words">
+                                                           {m.title} ({m.weight}%) —{' '}
+                                                           {submitted ? STATUS_LABEL[status] : isOverdue ? 'Overdue' : 'Pending'}
+                                                       </span>
+                                                       <p className={`text-xs mt-0.5 ${isOverdue ? 'text-red-300' : 'text-slate-400'}`}>
+                                                           Due {due.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                                                       </p>
+                                                   </div>
+                                               </div>
                                             {submitted && (
                                                 <button
                                                     onClick={() => setViewerFile({ url: submitted.file_upload, title: m.title })}
@@ -631,7 +660,7 @@ const StudentDashboard = () => {
                                         <option value="">Select a milestone or chapter...</option>
                                         {uploadTargets.map((t) => (
                                             <option key={t.key} value={t.key}>
-                                                {t.label}{t.sub?.status === 'REVISIONS' ? ' (Revise & Resubmit)' : ''}
+                                                {t.label} (due {new Date(t.due).toLocaleDateString()}){t.sub?.status === 'REVISIONS' ? ' — Revise & Resubmit' : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -895,6 +924,7 @@ const StudentDashboard = () => {
                                 <span className="text-white">{bookings.filter((b) => b.status === 'BOOKED').length}</span>
                             </div>
                         </div>
+                        <SecurityQuestionForm />
                         <button
                             onClick={() => setShowProfile(false)}
                             className="mt-5 w-full text-xs border border-white/10 text-slate-300 hover:text-white px-3 py-2 rounded"

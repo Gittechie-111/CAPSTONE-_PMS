@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { adminService, meetingSlotService, meetingBookingService, proposalService } from '../../services/api';
+import { adminService, meetingSlotService, meetingBookingService, proposalService, settingsService, milestoneService, milestoneAdminService } from '../../services/api';
+import { apiError } from '../../services/apiError';
 
 const NAV_ITEMS = [
     { id: 'automated-allocation', label: 'Dashboard', icon: '🏠' },
     { id: 'current-allocations', label: 'Allocations', icon: '📊' },
+    { id: 'timelines', label: 'Timelines', icon: '⏰' },
 ];
 
 const RESEARCH_AREAS = [
@@ -16,6 +18,12 @@ const RESEARCH_AREAS = [
     { value: 'OTHER', label: 'Other' },
 ];
 
+const toDatetimeLocal = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 const AdminDashboard = () => {
     const { user, logout } = useAuth();
@@ -31,6 +39,8 @@ const AdminDashboard = () => {
     const [unassigned, setUnassigned] = useState([]);
     const [supervisors, setSupervisors] = useState([]);
     const [pick, setPick] = useState({});
+    const [proposalDeadline, setProposalDeadline] = useState('');
+    const [milestones, setMilestones] = useState([]);
 
     const scrollToSection = (id) => {
         document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -54,9 +64,13 @@ const AdminDashboard = () => {
         meetingBookingService.getBookings(),
         proposalService.getUnassigned(),
         adminService.getSupervisors(),
+        settingsService.getSettings(),
+        milestoneService.getMilestones(),
         ]);
     setUnassigned(unassignedData);
     setSupervisors(supData);
+    setProposalDeadline(settingsData.proposal_deadline || '');
+    setMilestones(milestoneData);
     };
 
     useEffect(() => {
@@ -102,6 +116,39 @@ const AdminDashboard = () => {
             setError(`Auto-allocation failed (${err.response?.status || 'no response'}): ${d?.error || d?.detail || err.message}`);
         } finally {
             setRunning(false);
+        }
+    };
+
+    const handleSaveDeadline = async () => {
+        setError('');
+        try {
+            await settingsService.updateProposalDeadline(proposalDeadline || null);
+            await loadData();
+        } catch (err) {
+            setError(apiError(err, 'Could not save the deadline.'));
+        }
+    };
+
+    const handleUpdateMilestoneDate = async (id, value) => {
+        if (!value) return;
+        setError('');
+        try {
+            await milestoneAdminService.updateMilestone(id, { due_date: value });
+            await loadData();
+        } catch (err) {
+            setError(apiError(err, 'Could not update that date.'));
+        }
+    };
+
+    //updates the one milestone in state rather than reloading the whole page
+    const handleChapterDeadline = async (milestoneId, chapter, value, current) => {
+        if (value === toDatetimeLocal(current)) return;       // nothing changed
+        setError('');
+        try {
+            const updated = await milestoneAdminService.setChapterDeadlines(milestoneId, { [chapter]: value });
+            setMilestones((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+        } catch (err) {
+            setError(apiError(err, 'Could not save that chapter deadline.'));
         }
     };
 
@@ -284,6 +331,69 @@ const AdminDashboard = () => {
                                 </div>
                             </section>
                         )}
+
+                        <section id="timelines" className="border-t border-white/10 pt-8 scroll-mt-6">
+                            <h2 className="text-sm font-semibold text-white tracking-wide mb-1">Timelines</h2>
+                            <p className="text-xs text-slate-300 mb-4">These dates apply to every student and supervisor.</p>
+
+                            <label htmlFor="proposal-deadline" className="block text-sm text-slate-200 mb-1">Proposal topic deadline</label>
+                            <div className="flex gap-2 max-w-md mb-6">
+                                <input
+                                    id="proposal-deadline"
+                                    type="datetime-local"
+                                    value={toDatetimeLocal(proposalDeadline)}
+                                    onChange={(e) => setProposalDeadline(e.target.value)}
+                                    className="flex-1 px-3 py-2 border border-white/15 bg-slate-900/30 rounded text-white"
+                                />
+                                <button onClick={handleSaveDeadline} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium">
+                                    Save
+                                </button>
+                            </div>
+
+                            <p className="text-sm text-slate-200 mb-2">Milestone deadlines</p>
+                            <div className="space-y-3 max-w-md">
+                                {milestones.map((m) => (
+                                    <div key={m.id} className="space-y-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-sm text-slate-200">
+                                                {m.title} ({m.weight}%){m.has_chapters ? ' — final deadline' : ''}
+                                            </span>
+                                            <input
+                                                type="datetime-local"
+                                                defaultValue={toDatetimeLocal(m.due_date)}
+                                                onBlur={(e) => handleUpdateMilestoneDate(m.id, e.target.value)}
+                                                className="px-2 py-1 border border-white/15 bg-slate-900/30 rounded text-white text-sm"
+                                            />
+                                        </div>
+
+                                        {m.has_chapters && (
+                                            <div className="ml-4 pl-4 border-l border-white/10 space-y-2">
+                                                <p className="text-xs text-slate-400">
+                                                    Chapter deadlines. Leave a box empty to use the final deadline.
+                                                </p>
+                                                {[1, 2, 3, 4, 5].map((ch) => (
+                                                    <div
+                                                        key={`${m.id}-${ch}-${m.chapter_deadlines?.[ch] || ''}`}
+                                                        className="flex items-center justify-between gap-3"
+                                                    >
+                                                        <span className="text-xs text-slate-300">Chapter {ch}</span>
+                                                        <input
+                                                            type="datetime-local"
+                                                            defaultValue={toDatetimeLocal(m.chapter_deadlines?.[ch])}
+                                                            onBlur={(e) =>
+                                                                handleChapterDeadline(m.id, ch, e.target.value, m.chapter_deadlines?.[ch])
+                                                            }
+                                                            className="px-2 py-1 border border-white/15 bg-slate-900/30 rounded text-white text-sm"
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
                         <section id="automated-allocation" className="border-t border-white/10 pt-8 scroll-mt-6">
                             <div className="flex justify-between items-center mb-2">
                                 <h2 className="text-sm font-semibold text-white tracking-wide">Automated Allocation</h2>
