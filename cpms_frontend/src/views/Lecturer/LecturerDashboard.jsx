@@ -84,7 +84,7 @@ const LecturerDashboard = () => {
         try {
             const [
                 projectData, slotData, proposalData, milestoneData,
-                settingsData, bookingData, submissionData, notifData,
+                settingsData, bookingData, submissionData, notifData, supervisorData,
             ] = await Promise.all([
                 projectService.getProjects(),
                 meetingSlotService.getSlots(),
@@ -106,6 +106,7 @@ const LecturerDashboard = () => {
             setNotifications(notifData);
             setSupervisorProfile(supervisorData);
         } catch (err) {
+            console.error('Lecturer loadData failed:', err);
             setError('Could not load your dashboard data.');
         } finally {
             setLoading(false);
@@ -369,7 +370,11 @@ const LecturerDashboard = () => {
 
                     {/* Assigned Proposals & Feedback */}
                         <section id="assigned-proposals" className="border-t border-white/10 pt-8 scroll-mt-6">
-                            <h2 className="text-sm font-semibold text-white tracking-wide mb-4">Proposal Topics for Review</h2>
+                            {/* <h2 className="text-sm font-semibold text-white tracking-wide mb-4">Proposal Topics for Review</h2> */}
+                            <h2 className="text-sm font-semibold text-white tracking-wide mb-1">Proposal Topics for Review</h2>
+                            <p className="text-xs text-slate-400 mb-4">
+                                Topic submission deadline (set by the coordinator): {proposalDeadline ? formatDateTime(proposalDeadline) : 'not set'}
+                            </p>
                             {proposals.length === 0 ? (
                                 <p className="text-sm text-white/80">No proposal topics assigned to you yet.</p>
                             ) : (

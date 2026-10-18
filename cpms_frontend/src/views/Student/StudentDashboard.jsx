@@ -101,6 +101,7 @@ const StudentDashboard = () => {
         try {
             await fetchDashboardData();
         } catch (err) {
+            console.error('Student loadData failed:', err);
             setError('Could not load your dashboard data.');
         } finally {
             setLoading(false);
