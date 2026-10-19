@@ -43,6 +43,7 @@ const safe = (promise, fallback) =>
     });
 
 const fieldClass = 'w-full px-3 py-2 border border-white/15 bg-slate-900/30 rounded text-white';
+const areaLabel = (v) => RESEARCH_AREAS.find((r) => r.value === v)?.label || v || '';
 
 const AdminDashboard = () => {
     const { user, logout } = useAuth();
@@ -200,14 +201,18 @@ const AdminDashboard = () => {
         .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
 
     const term = allocSearch.trim().toLowerCase();
+    const areaByName = {};
     const bySupervisor = allocations
         .filter((a) =>
             !term ||
             a.title?.toLowerCase().includes(term) ||
-            a.student_details?.username?.toLowerCase().includes(term)
+            a.student_details?.username?.toLowerCase().includes(term) ||
+            a.supervisor_details?.user_details?.username?.toLowerCase().includes(term) ||
+            areaLabel(a.supervisor_details?.research_area).toLowerCase().includes(term)
         )
         .reduce((acc, a) => {
             const name = a.supervisor_details?.user_details?.username || 'Unassigned';
+            areaByName[name] = a.supervisor_details?.research_area;
             (acc[name] = acc[name] || []).push(a);
             return acc;
         }, {});
@@ -534,7 +539,12 @@ const AdminDashboard = () => {
                                                     onClick={() => setExpandedSupervisor(open ? null : name)}
                                                     className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
                                                 >
-                                                    <span className="text-sm text-white">{name}</span>
+                                                    <span className="text-sm text-white">
+                                                        {name}
+                                                        {areaByName[name] && (
+                                                            <span className="text-slate-400"> · {areaLabel(areaByName[name])}</span>
+                                                        )}
+                                                    </span>
                                                     <span className="text-xs text-slate-400">
                                                         {rows.length} student{rows.length !== 1 ? 's' : ''} {open ? '▲' : '▼'}
                                                     </span>

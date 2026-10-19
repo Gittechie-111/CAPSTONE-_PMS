@@ -136,9 +136,9 @@ const Login = () => {
                             >
                                 {submitting ? 'Verifying…' : 'Verify & Sign In'}
                             </button>
-                            <p className="text-center">
+                            {/* <p className="text-center">
                                 <Link to="/forgot-password" className="text-xs text-slate-400 hover:text-slate-200">Forgot password?</Link>
-                            </p>
+                            </p> */}
                             <button
                                 type="button"
                                 onClick={() => { setOtpChallenge(null); setOtpCode(''); setError(''); }}
@@ -199,6 +199,9 @@ const Login = () => {
                         >
                             {submitting ? 'Signing in…' : 'Sign In'}
                         </button>
+                            <p className="text-center">
+                               <Link to="/forgot-password" className="text-xs text-slate-400 hover:text-slate-200">Forgot password?</Link>
+                           </p>
                     </form>
                     )}
                     

@@ -11,6 +11,7 @@ const KIND_META = {
     PROPOSAL_APPROVED: { icon: '✅', cls: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-100' },
     PROPOSAL_REJECTED: { icon: '❌', cls: 'bg-red-500/10 border-red-400/30 text-red-100' },
     PROPOSAL_FEEDBACK: { icon: '💬', cls: 'bg-amber-500/10 border-amber-400/30 text-amber-100' },
+    DEADLINE_CHANGED: { icon: '📢', cls: 'bg-purple-500/10 border-purple-400/30 text-purple-100' },
 };
 
 const NotificationItem = ({ n, onDismiss }) => {
