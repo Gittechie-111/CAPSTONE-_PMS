@@ -112,3 +112,21 @@ def notify_proposal_feedback(proposal):
         proposal.student, 'PROPOSAL_FEEDBACK',
         f'The reviewing lecturer left feedback on "{proposal.title}": {proposal.supervisor_feedback}',
     )
+
+def notify_deadline_changed(new_deadline):
+    """Tells lecturers, and students who have no active topic yet, that the proposal deadline changed."""
+    if new_deadline:
+        text = f"The proposal topic deadline is now {fmt(new_deadline)}."
+    else:
+        text = "The proposal topic deadline was removed. Topics can be submitted at any time."
+
+    students = (
+        User.objects.filter(role='STUDENT', is_active=True)
+        .exclude(proposals__status__in=['PENDING', 'APPROVED'])
+    )
+    lecturers = User.objects.filter(role='LECTURER', is_active=True)
+
+    Notification.objects.bulk_create([
+        Notification(recipient=u, kind='DEADLINE_CHANGED', message=text)
+        for u in list(students) + list(lecturers)
+    ])

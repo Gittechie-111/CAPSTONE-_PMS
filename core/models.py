@@ -248,6 +248,7 @@ class Notification(models.Model):
         ('PROPOSAL_APPROVED', 'Proposal Approved'),
         ('PROPOSAL_REJECTED', 'Proposal Rejected'),
         ('PROPOSAL_FEEDBACK', 'Proposal Feedback'),
+        ('DEADLINE_CHANGED', 'Deadline Changed'),
     ]
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     message = models.TextField()

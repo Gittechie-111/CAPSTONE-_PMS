@@ -27,7 +27,7 @@ from .serializers import SystemSettingsSerializer
 from .notifications import (
     notify, notify_slot_opened, notify_slot_rescheduled,
     notify_slot_completed, notify_slot_cancelled,
-    notify_proposal_submitted, notify_proposal_decision, notify_proposal_feedback,
+    notify_proposal_submitted, notify_proposal_decision, notify_proposal_feedback, notify_deadline_changed
 )
 from django.db.models import Count, Q
 from datetime import timedelta
@@ -685,9 +685,12 @@ class SystemSettingsViewSet(viewsets.ModelViewSet):
     def current(self, request):
         settings_obj, _ = SystemSettings.objects.get_or_create(id=1)
         if request.method == 'PATCH':
+            old_deadline = settings_obj.proposal_deadline
             serializer = SystemSettingsSerializer(settings_obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            if settings_obj.proposal_deadline != old_deadline:
+                notify_deadline_changed(settings_obj.proposal_deadline)
             return Response(serializer.data)
         return Response(SystemSettingsSerializer(settings_obj).data)
 
